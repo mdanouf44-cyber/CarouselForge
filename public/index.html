@@ -163,6 +163,9 @@
               <button class="btn btn-action-approve" id="btn-approve">
                 <span class="btn-symbol">✓</span> Approve & Save to Output
               </button>
+              <button class="btn btn-action-download" id="btn-download-zip-active">
+                <span class="btn-symbol">📥</span> Download ZIP
+              </button>
               <button class="btn btn-action-regen" id="btn-regen">
                 <span class="btn-symbol">↻</span> Regenerate Next Angle
               </button>
@@ -218,10 +221,12 @@
       </div>
       <div class="modal-footer">
         <span id="modal-folder-path">Folder: dist/approved/run-xxx</span>
+        <button class="btn-copy-post" id="btn-download-zip-modal" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 13px;">📥 Download ZIP</button>
       </div>
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="dashboard.js"></script>
 </body>
 </html>

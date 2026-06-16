@@ -4,6 +4,8 @@
 
 let activeRunId = null;
 let isCurationActive = false;
+let activeRunDetails = { title: '', imagePaths: [] };
+let currentModalRun = { title: '', imagePaths: [] };
 
 // Format local absolute file path to web-served URL
 function getImageUrl(filePath) {
@@ -97,6 +99,9 @@ function renderCurationWorkspace(run) {
   activeRunId = run.id;
   isCurationActive = true;
   
+  activeRunDetails.title = run.angle.title;
+  activeRunDetails.imagePaths = run.imagePaths || [];
+  
   document.getElementById('curation-empty').classList.add('hidden');
   document.getElementById('curation-content').classList.remove('hidden');
   
@@ -142,6 +147,7 @@ function renderCurationWorkspace(run) {
 function clearCurationWorkspace() {
   activeRunId = null;
   isCurationActive = false;
+  activeRunDetails = { title: '', imagePaths: [] };
   document.getElementById('curation-content').classList.add('hidden');
   document.getElementById('curation-empty').classList.remove('hidden');
   document.getElementById('post-caption-textarea').value = '';
@@ -274,6 +280,59 @@ async function submitCurationAction(action) {
 }
 
 // ==========================================
+// ZIP FILE EXPORT CONTROLS
+// ==========================================
+
+async function downloadImagesAsZip(title, imagePaths) {
+  if (!imagePaths || imagePaths.length === 0) {
+    logToTerminal('No images available to download.', 'ERROR');
+    alert('No images available to download!');
+    return;
+  }
+
+  logToTerminal(`Preparing ZIP archive for: "${title}"...`, 'SYSTEM');
+
+  try {
+    const zip = new JSZip();
+    const folderName = title.replace(/[^a-z0-9]/gi, '_').substring(0, 50).toLowerCase();
+
+    for (let i = 0; i < imagePaths.length; i++) {
+      const path = imagePaths[i];
+      const url = getImageUrl(path);
+      const filename = `slide-${i + 1}.png`;
+
+      logToTerminal(`Fetching image ${i + 1} of ${imagePaths.length}...`, 'SYSTEM');
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`Failed to retrieve image: ${filename} (${response.statusText})`);
+      }
+      const blob = await response.blob();
+      zip.file(filename, blob);
+    }
+
+    logToTerminal('Compressing and packaging ZIP archive...', 'SYSTEM');
+    const zipBlob = await zip.generateAsync({ type: 'blob' });
+    const zipUrl = URL.createObjectURL(zipBlob);
+
+    const zipFileName = `carousel-${folderName}.zip`;
+    const tempLink = document.createElement('a');
+    tempLink.href = zipUrl;
+    tempLink.download = zipFileName;
+    document.body.appendChild(tempLink);
+    tempLink.click();
+    document.body.removeChild(tempLink);
+    
+    setTimeout(() => URL.revokeObjectURL(zipUrl), 100);
+
+    logToTerminal(`ZIP archive downloaded: ${zipFileName}`, 'SUCCESS');
+  } catch (err) {
+    console.error('Failed to download ZIP:', err);
+    logToTerminal(`ZIP download failed: ${err.message}`, 'ERROR');
+    alert(`Failed to create ZIP: ${err.message}`);
+  }
+}
+
+// ==========================================
 // PREVIEW MODAL DIALOG CONTROLS
 // ==========================================
 
@@ -283,6 +342,9 @@ function openPreviewModal(title, imagePaths) {
   const container = document.getElementById('modal-slides-container');
   const pathLabel = document.getElementById('modal-folder-path');
   
+  currentModalRun.title = title;
+  currentModalRun.imagePaths = imagePaths || [];
+  
   modalTitle.textContent = title;
   container.innerHTML = '';
 
@@ -290,7 +352,7 @@ function openPreviewModal(title, imagePaths) {
     container.innerHTML = `<div class="text-center text-muted" style="grid-column: span 3; padding: 40px;">No slide images available for this record (possibly cleaned up on rejection).</div>`;
     pathLabel.textContent = '';
   } else {
-    // Show 6 slides
+    // Show slides
     imagePaths.forEach((path, idx) => {
       const card = document.createElement('div');
       card.className = 'modal-slide-card';
@@ -312,6 +374,7 @@ function openPreviewModal(title, imagePaths) {
 }
 
 function closePreviewModal() {
+  currentModalRun = { title: '', imagePaths: [] };
   document.getElementById('preview-modal').classList.add('hidden');
 }
 
@@ -337,6 +400,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Curation Action Listeners
   document.getElementById('btn-approve').addEventListener('click', () => submitCurationAction('approve'));
+  document.getElementById('btn-download-zip-active').addEventListener('click', () => {
+    downloadImagesAsZip(activeRunDetails.title, activeRunDetails.imagePaths);
+  });
   document.getElementById('btn-regen').addEventListener('click', () => submitCurationAction('regen'));
   document.getElementById('btn-reject').addEventListener('click', () => submitCurationAction('reject'));
 
@@ -351,6 +417,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Modal Close Listeners
   document.getElementById('btn-close-modal').addEventListener('click', closePreviewModal);
+  document.getElementById('btn-download-zip-modal').addEventListener('click', () => {
+    downloadImagesAsZip(currentModalRun.title, currentModalRun.imagePaths);
+  });
   document.getElementById('preview-modal').addEventListener('click', (e) => {
     if (e.target.id === 'preview-modal') closePreviewModal();
   });

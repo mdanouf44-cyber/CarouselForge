@@ -596,10 +596,29 @@ body {
 /* Curation buttons panel */
 .curation-action-buttons {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   gap: 15px;
   border-top: 1px solid var(--border-panel);
   padding-top: 25px;
+}
+
+.btn-action-download {
+  background: rgba(167, 139, 250, 0.15);
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  color: #a78bfa;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.btn-action-download:hover {
+  background: #a78bfa;
+  color: #fff;
 }
 
 .btn-action-approve {

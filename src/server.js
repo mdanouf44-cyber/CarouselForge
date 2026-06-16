@@ -36,8 +36,8 @@ initDb();
 
 // Helper to provide mockup slide data if API key is missing
 async function getSlidesContent(story, timeSlot) {
-  if (!process.env.GEMINI_API_KEY) {
-    console.log('No GEMINI_API_KEY detected. Using mockup slides content fallback...');
+  if (!process.env.GEMINI_API_KEY && !process.env.NVIDIA_API_KEY) {
+    console.log('No GEMINI_API_KEY or NVIDIA_API_KEY detected. Using mockup slides content fallback...');
 
     // Shorten title if it is too long for the intro headline
     const cleanTitle = story.title.replace(/[^\w\s-]/g, '').trim();
@@ -453,7 +453,11 @@ async function executePipeline(timeSlot, chatId) {
   } catch (error) {
     console.error('Pipeline execution failed:', error);
     if (chatId && chatId !== 'manual-trigger' && bot) {
-      await bot.sendMessage(chatId, `🚨 *Pipeline Failure Alert!*\n\n*Error*: ${error.message}\n*Timestamp*: ${new Date().toLocaleString()}`, { parse_mode: 'Markdown' });
+      try {
+        await bot.sendMessage(chatId, `🚨 *Pipeline Failure Alert!*\n\n*Error*: ${error.message}\n*Timestamp*: ${new Date().toLocaleString()}`, { parse_mode: 'Markdown' });
+      } catch (tgSendErr) {
+        console.error('Failed to send pipeline failure alert to Telegram:', tgSendErr.message);
+      }
     }
   }
 }
@@ -509,6 +513,7 @@ app.get('/api/status', (req, res) => {
     serverTimeIst: istTimeStr,
     botConfigured: !!token,
     geminiConfigured: !!process.env.GEMINI_API_KEY,
+    nvidiaConfigured: !!process.env.NVIDIA_API_KEY,
     chatConfigured: !!defaultChatId,
     cronSchedule: {
       am: '08:00 AM IST',
