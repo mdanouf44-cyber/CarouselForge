@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carousel Forge — AI LinkedIn Carousel Curation Dashboard</title>
+  
+  <!-- Premium Fonts CDN -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+  
+  <!-- Premium Glassmorphism Glowing Background Elements -->
+  <div class="bg-glow bg-glow-primary"></div>
+  <div class="bg-glow bg-glow-secondary"></div>
+
+  <div class="app-container">
+    
+    <!-- Top Header Bar -->
+    <header class="app-header">
+      <div class="logo-area">
+        <span class="logo-icon">⚡</span>
+        <div class="logo-text">
+          <h1>Carousel Forge</h1>
+          <p>LinkedIn Content Curation System</p>
+        </div>
+      </div>
+      
+      <div class="header-meta">
+        <div class="meta-item">
+          <span class="meta-label">Timezone</span>
+          <span class="meta-value">Asia/Kolkata (IST)</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Server Time</span>
+          <span class="meta-value" id="live-clock">--:--:--</span>
+        </div>
+        <div class="status-indicator">
+          <span class="status-dot online"></span>
+          <span class="status-text">Server Online</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Grid Layout -->
+    <main class="dashboard-grid">
+      
+      <!-- LEFT SECTION: Stats & Manual Run Console -->
+      <section class="left-column">
+        
+        <!-- KPI Stats Panel -->
+        <div class="glass-panel stats-panel">
+          <h2>Overview Analytics</h2>
+          <div class="stats-grid">
+            <div class="stat-card">
+              <span class="stat-num" id="stat-total">0</span>
+              <span class="stat-label">Total Runs</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-num text-success" id="stat-approved">0</span>
+              <span class="stat-label">Approved</span>
+            </div>
+            <div class="stat-card text-glow-indigo">
+              <span class="stat-num" id="stat-rate">0%</span>
+              <span class="stat-label">Approval Rate</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-num text-danger" id="stat-rejected">0</span>
+              <span class="stat-label">Rejected</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Manual Console Panel -->
+        <div class="glass-panel console-panel">
+          <h2>Orchestrator Controls</h2>
+          <p class="panel-desc">Manually trigger automated scraping, ranking, and rendering pipelines for any timeslot.</p>
+          <div class="console-actions">
+            <button class="btn btn-primary btn-glow-indigo" id="btn-trigger-am">
+              <span class="btn-icon">☀️</span>
+              <div class="btn-lbl">
+                <strong>Trigger AM Run</strong>
+                <span>Scrapes Yesterday's News</span>
+              </div>
+            </button>
+            <button class="btn btn-secondary btn-glow-pink" id="btn-trigger-pm">
+              <span class="btn-icon">🌙</span>
+              <div class="btn-lbl">
+                <strong>Trigger PM Run</strong>
+                <span>Scrapes Today's Trends</span>
+              </div>
+            </button>
+          </div>
+          
+          <div class="system-logs-container">
+            <div class="logs-header">
+              <span>System Output Logs</span>
+              <span class="status-badge" id="bot-status-badge">Bot Active</span>
+            </div>
+            <div class="logs-terminal" id="terminal-logs">
+              [SYSTEM] Web Dashboard initialized.<br>
+              [SYSTEM] Polling database records...
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT SECTION: Active Carousel Curation & History Log -->
+      <section class="right-column">
+        
+        <!-- Curate / Pending Slide Review Panel -->
+        <div class="glass-panel curation-panel" id="curation-workspace">
+          <div class="workspace-header">
+            <h2>Active Curation Space</h2>
+            <span class="badge badge-pending" id="active-badge">PENDING REVIEW</span>
+          </div>
+          
+          <!-- Loading State / Placeholder -->
+          <div class="curation-empty-state" id="curation-empty">
+            <div class="empty-icon">📂</div>
+            <h3>No Pending Carousels</h3>
+            <p>Use the controls on the left to trigger a pipeline run or wait for the scheduled daily runs (08:00 AM / PM IST) to populate this curation space.</p>
+          </div>
+
+          <!-- Active Workspace Content -->
+          <div class="curation-workspace-content hidden" id="curation-content">
+            <div class="story-metadata-card">
+              <div class="metadata-row">
+                <span class="meta-tag" id="story-slot">AM SLOT</span>
+                <span class="meta-tag tag-muted" id="story-run-id">run-12345678</span>
+              </div>
+              <h3 id="story-title">Google releases Gemini 1.5 Pro updates with 2M context window</h3>
+              <div class="source-urls" id="story-sources">
+                <!-- Sources links injected here -->
+              </div>
+            </div>
+
+            <!-- Slides Scroll Preview Container -->
+            <div class="slides-preview-container-wrapper">
+              <div class="scroll-btn scroll-btn-left" id="btn-scroll-left">&lt;</div>
+              <div class="slides-scroll-container" id="slides-deck">
+                <!-- Slide PNG images dynamically loaded here -->
+              </div>
+              <div class="scroll-btn scroll-btn-right" id="btn-scroll-right">&gt;</div>
+            </div>
+            <p class="slide-deck-hint">← Swipe or drag to view all 5 slides in the deck →</p>
+
+            <!-- LinkedIn Post Text Copy Block -->
+            <div class="linkedin-post-container">
+              <div class="post-container-header">
+                <span>📝 Generated LinkedIn Post Copy</span>
+                <button class="btn-copy-post" id="btn-copy-post">Copy Text</button>
+              </div>
+              <textarea class="post-textarea" id="post-caption-textarea" readonly placeholder="No LinkedIn caption generated for this run."></textarea>
+            </div>
+
+            <!-- Curative Actions Panel -->
+            <div class="curation-action-buttons">
+              <button class="btn btn-action-approve" id="btn-approve">
+                <span class="btn-symbol">✓</span> Approve & Save to Output
+              </button>
+              <button class="btn btn-action-regen" id="btn-regen">
+                <span class="btn-symbol">↻</span> Regenerate Next Angle
+              </button>
+              <button class="btn btn-action-reject" id="btn-reject">
+                <span class="btn-symbol">✗</span> Reject Run
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- History Log Panel -->
+        <div class="glass-panel history-panel">
+          <div class="history-header">
+            <h2>Run History Archives</h2>
+            <div class="history-filters">
+              <input type="text" placeholder="Search topics..." id="search-filter" class="search-input">
+            </div>
+          </div>
+          
+          <div class="table-scroll-container">
+            <table class="history-table">
+              <thead>
+                <tr>
+                  <th>Time Slot</th>
+                  <th>Topic</th>
+                  <th>Date Created</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="history-tbody">
+                <tr>
+                  <td colspan="4" class="text-center">Loading runs...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+  </div>
+
+  <!-- Expandable Slide Previews Dialog Backdrop -->
+  <div class="modal-backdrop hidden" id="preview-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-title">Carousel Preview</h3>
+        <button class="close-modal-btn" id="btn-close-modal">✕</button>
+      </div>
+      <div class="modal-slides-grid" id="modal-slides-container">
+        <!-- 6 PNG images displayed in a grid for scanning -->
+      </div>
+      <div class="modal-footer">
+        <span id="modal-folder-path">Folder: dist/approved/run-xxx</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>

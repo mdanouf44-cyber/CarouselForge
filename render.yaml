@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: carousel-forge
+    env: docker
+    plan: free
+    port: 3000
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: NVIDIA_MODEL
+        value: minimaxai/minimax-m3
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_CHAT_ID
+        sync: false
+      - key: DEV_MODE
+        value: "false"

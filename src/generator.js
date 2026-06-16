@@ -1,0 +1,160 @@
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+if (!process.env.GEMINI_API_KEY && !process.env.NVIDIA_API_KEY) {
+  console.warn('Warning: Neither GEMINI_API_KEY nor NVIDIA_API_KEY is defined in the environment variables.');
+}
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+
+// Clean code blocks from JSON string if the model returns them
+function cleanJsonString(text) {
+  let cleaned = text.trim();
+  if (cleaned.startsWith('```')) {
+    // Strip leading ```json or ``` and trailing ```
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  }
+  return cleaned.trim();
+}
+
+// Prompt template used for both Gemini and NVIDIA NIM models
+function buildSystemPrompt(story, timeSlot = 'am') {
+  const isMorning = timeSlot === 'am';
+  const slotDescription = isMorning 
+    ? "AM (Morning Run): Write a deep-dive, reflective, and analytical LinkedIn post. Focus on a thorough summary of yesterday's tech/AI developments and what they mean for the industry. The tone should be highly professional, structured, and insightful."
+    : "PM (Evening Run): Write a high-energy, breaking news LinkedIn post. Focus on immediate, exciting, and fast-paced daily highlights. The tone should be direct, engaging, and actionable, emphasizing what just happened today.";
+
+  return `
+You are a senior tech writer and LinkedIn branding expert.
+Your job is to transform a trending tech/AI news story into:
+1. A highly engaging, professional 5-slide LinkedIn carousel.
+2. A high-converting LinkedIn post caption (the text copy) customized for the ${timeSlot.toUpperCase()} slot.
+
+Here are the news story details:
+Source: ${story.source || story.sources?.join(', ') || 'Tech Feeds'}
+Title: ${story.title}
+Link: ${story.url}
+Summary details: ${story.summary}
+
+Create content for exactly 5 slides and the accompanying LinkedIn post. The content must be structured as JSON matching this schema:
+
+{
+  "date": "YYYY-MM-DD", // Date of the news story or current date
+  "linkedin_post": "An engaging, high-converting LinkedIn post caption (150-250 words) written in a professional branding voice. Follow these guidelines for the ${timeSlot.toUpperCase()} slot:\\n${slotDescription}\\n\\nStructure the post with:\\n- A scroll-stopping hook (1 sentence)\\n- Core context summary (1-2 sentences)\\n- 3 bulleted key takeaways (clearly separated)\\n- 1 community question to drive comments\\n- 3-5 relevant tech hashtags (e.g. #AI #TechNews)",
+  "slides": [
+    {
+      "slide_number": 1,
+      "type": "intro",
+      "headline": "Bold, scroll-stopping headline (max 8 words, strong hook, condensed style)",
+      "subheadline": "Clear teaser of what they will learn (max 12 words)"
+    },
+    {
+      "slide_number": 2,
+      "type": "story",
+      "title": "Brief Slide Title (e.g., The Announcement)",
+      "content": "A single cohesive paragraph of 20-30 words summarizing what happened. Do not use bullets, numbers, or lists."
+    },
+    {
+      "slide_number": 3,
+      "type": "deep_dive",
+      "title": "Brief Slide Title (e.g., How It Works)",
+      "content": "A single cohesive paragraph of 20-30 words detailing the technical mechanics or key details. Do not use bullets, numbers, or lists."
+    },
+    {
+      "slide_number": 4,
+      "type": "impact",
+      "title": "Brief Slide Title (e.g., The Future)",
+      "content": "A single cohesive paragraph of 20-30 words explaining the industry impact or practical takeaways. Do not use bullets, numbers, or lists."
+    },
+    {
+      "slide_number": 5,
+      "type": "outro",
+      "headline": "THANK YOU!",
+      "subheadline": "Follow for daily AI & tech breakdowns. Share your thoughts in the comments!"
+    }
+  ]
+}
+
+Instructions:
+1. Tone must be professional, insightful, and clear. Avoid generic hype words like "revolutionary", "game-changing", "groundbreaking", or "mind-blowing".
+2. Keep slide text short and concise so it does not overflow when rendered on a square slide (1080x1080px).
+3. The content must be factual and directly draw from the provided news story.
+4. Each slide's text MUST NOT exceed 250 characters.
+5. Provide raw JSON only.
+`;
+}
+
+// Fetch completions from NVIDIA NIM (OpenAI compatible endpoint)
+async function generateNvidiaContent(story, timeSlot) {
+  const apiKey = process.env.NVIDIA_API_KEY;
+  const model = process.env.NVIDIA_MODEL || 'meta/llama-3.1-70b-instruct';
+  
+  console.log(`Generating AI carousel content via NVIDIA NIM API (Model: ${model}) for story: "${story.title}"`);
+  const prompt = buildSystemPrompt(story, timeSlot);
+
+  const response = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: model,
+      messages: [
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.2,
+      max_tokens: 1024,
+      response_format: { type: 'json_object' }
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`NVIDIA NIM API error: Status ${response.status} ${response.statusText} - ${errorText}`);
+  }
+
+  const result = await response.json();
+  const text = result.choices[0].message.content;
+  const cleanedText = cleanJsonString(text);
+  return JSON.parse(cleanedText);
+}
+
+// Fetch completions from Google Gemini
+async function generateGeminiContent(story, timeSlot) {
+  console.log(`Generating AI carousel content via Gemini (Model: gemini-1.5-flash) for story: "${story.title}"`);
+  
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY is not defined in the environment.');
+  }
+
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-1.5-flash',
+    generationConfig: {
+      responseMimeType: 'application/json',
+    }
+  });
+
+  const prompt = buildSystemPrompt(story, timeSlot);
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
+  const cleanedText = cleanJsonString(text);
+  return JSON.parse(cleanedText);
+}
+
+// Main generation wrapper with fallback controls
+export async function generateCarouselContent(story, timeSlot) {
+  // If NVIDIA is configured, try it first
+  if (process.env.NVIDIA_API_KEY) {
+    try {
+      return await generateNvidiaContent(story, timeSlot);
+    } catch (error) {
+      console.warn('NVIDIA NIM API generation failed. Falling back to Gemini...', error.message);
+    }
+  }
+
+  // Fallback to Gemini
+  return await generateGeminiContent(story, timeSlot);
+}

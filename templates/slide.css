@@ -1,0 +1,221 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  background-color: #151515;
+}
+
+.carousel-container {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Base Slide Layout */
+.slide {
+  width: 1080px;
+  height: 1080px;
+  padding: 90px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  overflow: hidden;
+  page-break-after: always;
+}
+
+/* Dark Theme Slide (Slides 1, 2, 5) */
+.slide-theme-dark {
+  background-color: #151515;
+  background-image: repeating-linear-gradient(
+    60deg,
+    rgba(255, 255, 255, 0.05) 0px,
+    rgba(255, 255, 255, 0.05) 1px,
+    transparent 1px,
+    transparent 10px
+  );
+  color: #FFFFFF;
+}
+
+/* Light Theme Slide (Slides 3, 4) */
+.slide-theme-light {
+  background-color: #FFFFFF;
+  background-image: repeating-linear-gradient(
+    60deg,
+    rgba(112, 36, 242, 0.04) 0px,
+    rgba(112, 36, 242, 0.04) 1px,
+    transparent 1px,
+    transparent 10px
+  );
+  color: #111111;
+}
+
+/* Slide Header */
+.slide-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  z-index: 10;
+}
+
+.brand-handle {
+  font-family: 'Inter', sans-serif;
+  font-size: 22px;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 2.5px;
+}
+
+.slide-theme-dark .brand-handle {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.slide-theme-light .brand-handle {
+  color: #444444;
+}
+
+/* Pill Slide Number Badge */
+.slide-number {
+  font-family: 'Inter', sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: #FFFFFF;
+  background-color: var(--brand-accent, #7024f2);
+  padding: 8px 24px;
+  border-radius: 50px;
+  letter-spacing: 0.5px;
+}
+
+/* Slide Footer */
+.slide-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  z-index: 10;
+}
+
+.footer-author {
+  font-family: 'Inter', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.slide-theme-dark .footer-author {
+  color: #FFFFFF;
+}
+
+.slide-theme-light .footer-author {
+  color: #111111;
+}
+
+.footer-icon {
+  font-size: 44px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.slide-theme-dark .footer-icon {
+  color: #FFFFFF;
+}
+
+.slide-theme-light .footer-icon {
+  color: var(--brand-accent, #7024f2);
+}
+
+.footer-icon-heart {
+  font-size: 38px;
+}
+
+/* Accent Bar */
+.accent-bar {
+  width: calc(100% - 180px);
+  height: 16px;
+  background-color: var(--brand-accent, #7024f2);
+  border-radius: 10px;
+  position: absolute;
+  left: 90px;
+  z-index: 5;
+}
+
+/* Positioned at bottom for slides 1, 2, 3, 4 */
+.accent-bar-bottom {
+  bottom: 160px;
+}
+
+/* Positioned at top for slide 5 */
+.accent-bar-top {
+  top: 170px;
+}
+
+/* Slide Content Containers */
+.slide-content-area {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  width: 100%;
+  padding-bottom: 80px; /* offset for bottom accent bar */
+}
+
+/* Shift content area down for slide 5 (outro) since accent bar is at the top */
+.slide-content-area-outro {
+  padding-bottom: 0;
+  padding-top: 80px;
+}
+
+/* Slide Titles (Bebas Neue Condensed Style) */
+.slide-title-large {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 110px;
+  line-height: 0.95;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 30px;
+}
+
+.slide-title-body {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 90px;
+  line-height: 0.95;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 25px;
+}
+
+.slide-theme-dark .slide-title-large,
+.slide-theme-dark .slide-title-body {
+  color: #FFFFFF;
+}
+
+.slide-theme-light .slide-title-body {
+  color: #111111;
+}
+
+/* Subtitle and Paragraph Body Content (Inter) */
+.slide-paragraph {
+  font-family: 'Inter', sans-serif;
+  font-size: 30px;
+  line-height: 1.55;
+  max-width: 860px;
+  font-weight: 300;
+}
+
+.slide-theme-dark .slide-paragraph {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.slide-theme-light .slide-paragraph {
+  color: #333333;
+}

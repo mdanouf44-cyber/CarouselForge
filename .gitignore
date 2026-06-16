@@ -1,0 +1,33 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Local configuration
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Build outputs and temporary files
+dist/
+build/
+temp/
+*.pdf
+*.png
+*.jpg
+*.jpeg
+
+# Databases and cache
+data/
+.eslintcache
+.parcel-cache
+.cache
+.npm
+
+# Large media files
+demo.mp4
+
+# OS metadata files
+.DS_Store
+Thumbs.db

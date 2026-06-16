@@ -1,0 +1,48 @@
+name: Generate Tech Carousel
+
+on:
+  schedule:
+    # 08:00 AM IST (02:30 UTC)
+    - cron: '30 2 * * *'
+    # 08:00 PM IST (14:30 UTC)
+    - cron: '30 14 * * *'
+  workflow_dispatch:
+    # Allows manual trigger from GitHub UI
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+
+    - name: Install Dependencies
+      run: npm ci
+      env:
+        PUPPETEER_SKIP_DOWNLOAD: '1'
+
+    - name: Install Puppeteer Chrome Browser
+      run: npx puppeteer browsers install chrome
+
+    - name: Run Carousel Generation Pipeline
+      run: node src/index.js
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        DEV_MODE: 'false'
+        BRAND_HANDLE: ${{ secrets.BRAND_HANDLE || '@YourLinkedInHandle' }}
+        BRAND_LOGO_TEXT: ${{ secrets.BRAND_LOGO_TEXT || '⚡' }}
+        BRAND_BACKGROUND: '#0F0F1A'
+        BRAND_TEXT_PRIMARY: '#F9FAFB'
+        BRAND_TEXT_SECONDARY: '#9CA3AF'
+        BRAND_ACCENT: '#6366F1'
+        BRAND_SECONDARY: '#EC4899'
+        BRAND_CARD_BG: '#1E1E2E'
