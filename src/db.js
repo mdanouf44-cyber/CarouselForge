@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 
 dotenv.config();
 
@@ -17,6 +19,40 @@ if (supabaseUrl && supabaseAnonKey) {
   }
 } else {
   console.error('❌ Error: SUPABASE_URL or SUPABASE_ANON_KEY is missing in your .env file.');
+}
+
+// Helper to upload a local file to Supabase Storage and get its public URL
+export async function uploadImageToStorage(localFilePath, runId, slideName) {
+  if (!supabase) return null;
+
+  try {
+    const fileBuffer = fs.readFileSync(localFilePath);
+    // Use standard forward slashes for path in storage bucket
+    const storagePath = `${runId}/${slideName}`;
+
+    // Upload to Supabase Storage bucket
+    const { data, error } = await supabase.storage
+      .from('carousel-images')
+      .upload(storagePath, fileBuffer, {
+        contentType: 'image/png',
+        upsert: true
+      });
+
+    if (error) {
+      console.error(`Error uploading ${slideName} to Supabase Storage:`, error.message);
+      return null;
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from('carousel-images')
+      .getPublicUrl(storagePath);
+
+    return urlData?.publicUrl || null;
+  } catch (err) {
+    console.error(`Failed to upload local file ${localFilePath} to Supabase Storage:`, err.message);
+    return null;
+  }
 }
 
 // Check connection and log status
@@ -152,15 +188,33 @@ export async function addHistoryEntry(entry) {
   if (!supabase) return;
 
   try {
+    const runId = entry.id || `run-${Date.now()}`;
+    const remoteUrls = [];
+    
+    // Upload slide images to Supabase Storage and get public URLs
+    if (entry.imagePaths && entry.imagePaths.length > 0) {
+      console.log(`[Database] Uploading ${entry.imagePaths.length} slide images to Supabase Storage...`);
+      for (let i = 0; i < entry.imagePaths.length; i++) {
+        const localPath = entry.imagePaths[i];
+        const fileName = path.basename(localPath);
+        const publicUrl = await uploadImageToStorage(localPath, runId, fileName);
+        if (publicUrl) {
+          remoteUrls.push(publicUrl);
+        } else {
+          remoteUrls.push(localPath);
+        }
+      }
+    }
+
     const { error } = await supabase
       .from('carousel_history')
       .insert({
-        id: entry.id || `run-${Date.now()}`,
+        id: runId,
         time_slot: entry.timeSlot,
         status: entry.status,
         angle: entry.angle,
         slides: entry.slides,
-        image_paths: entry.imagePaths || [],
+        image_paths: remoteUrls,
         linkedin_post: entry.linkedin_post || ''
       });
 
@@ -187,7 +241,25 @@ export async function updateHistoryStatus(id, status, extraFields = {}) {
     
     // Map Javascript camelCase property to Postgres snake_case field
     if (extraFields.imagePaths) {
-      updateData.image_paths = extraFields.imagePaths;
+      const remoteUrls = [];
+      console.log(`[Database] Uploading ${extraFields.imagePaths.length} approved slide images to Supabase Storage...`);
+      for (let i = 0; i < extraFields.imagePaths.length; i++) {
+        const localPath = extraFields.imagePaths[i];
+        if (localPath.startsWith('http://') || localPath.startsWith('https://')) {
+          // Already a remote URL
+          remoteUrls.push(localPath);
+        } else {
+          // Upload local file to storage
+          const fileName = path.basename(localPath);
+          const publicUrl = await uploadImageToStorage(localPath, id, fileName);
+          if (publicUrl) {
+            remoteUrls.push(publicUrl);
+          } else {
+            remoteUrls.push(localPath);
+          }
+        }
+      }
+      updateData.image_paths = remoteUrls;
     }
     if (extraFields.linkedin_post) {
       updateData.linkedin_post = extraFields.linkedin_post;
