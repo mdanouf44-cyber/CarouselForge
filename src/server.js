@@ -31,8 +31,8 @@ if (token) {
   console.warn('⚠️ Warning: TELEGRAM_BOT_TOKEN is missing in .env. Telegram integration is disabled, but the Web Curation Dashboard is fully active.');
 }
 
-// Initialize local JSON database
-initDb();
+// Initialize database client connection
+initDb().catch(console.error);
 
 // Helper to provide mockup slide data if API key is missing
 async function getSlidesContent(story, timeSlot) {
@@ -90,7 +90,7 @@ async function getSlidesContent(story, timeSlot) {
 // ==========================================
 
 export async function approveRun(runId) {
-  const db = readDb();
+  const db = await readDb();
   const entryIndex = db.history.findIndex(h => h.id === runId && h.status === 'pending');
 
   if (entryIndex === -1) {
@@ -115,12 +115,12 @@ export async function approveRun(runId) {
   }
 
   // Update history entry status
-  updateHistoryStatus(runId, 'approved', { imagePaths: newPaths });
+  await updateHistoryStatus(runId, 'approved', { imagePaths: newPaths });
   return { status: 'approved', approvedDir };
 }
 
 export async function rejectRun(runId) {
-  const db = readDb();
+  const db = await readDb();
   const entryIndex = db.history.findIndex(h => h.id === runId && h.status === 'pending');
 
   if (entryIndex === -1) {
@@ -134,7 +134,7 @@ export async function rejectRun(runId) {
   const entry = db.history[entryIndex];
 
   // Update DB status to rejected
-  updateHistoryStatus(runId, 'rejected');
+  await updateHistoryStatus(runId, 'rejected');
 
   // Clean up temporary PNG files
   if (entry.imagePaths && entry.imagePaths.length > 0) {
@@ -152,7 +152,7 @@ export async function rejectRun(runId) {
 }
 
 export async function regenerateRun(runId) {
-  const db = readDb();
+  const db = await readDb();
   const currentRun = db.current_run;
 
   if (!currentRun || currentRun.runId !== runId) {
@@ -166,7 +166,7 @@ export async function regenerateRun(runId) {
 
   // Update active angle index in DB
   currentRun.currentAngleIndex = nextIndex;
-  writeDb(db);
+  await writeDb(db);
 
   const story = currentRun.angles[nextIndex];
 
@@ -190,12 +190,12 @@ export async function regenerateRun(runId) {
   }
 
   // Remove previous pending run ID records to keep ID unique
-  const freshDb = readDb();
+  const freshDb = await readDb();
   freshDb.history = freshDb.history.filter(h => h.id !== runId);
-  writeDb(freshDb);
+  await writeDb(freshDb);
 
   // Add fresh pending entry
-  addHistoryEntry({
+  await addHistoryEntry({
     id: runId,
     timeSlot: currentRun.timeSlot,
     status: 'pending',
@@ -271,7 +271,7 @@ if (bot) {
 
   bot.onText(/\/status/, async (msg) => {
     const chatId = msg.chat.id;
-    const db = readDb();
+    const db = await readDb();
     const approvedCount = db.history.filter(h => h.status === 'approved').length;
 
     const options = { timeZone: 'Asia/Kolkata', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false };
@@ -293,7 +293,7 @@ if (bot) {
 
   bot.onText(/\/history/, async (msg) => {
     const chatId = msg.chat.id;
-    const db = readDb();
+    const db = await readDb();
     const history = db.history.slice(-7).reverse();
 
     if (history.length === 0) {
@@ -354,7 +354,9 @@ if (bot) {
       } else if (action.startsWith('regen_')) {
         const runId = action.replace('regen_', '');
         await bot.answerCallbackQuery(callbackQuery.id, { text: 'Regenerating carousel...' });
-        await bot.editMessageText(`Carousel (${runId}) - Regenerating using Angle #${readDb().current_run.currentAngleIndex + 2}...`, { chat_id: chatId, message_id: message.message_id });
+        const dbState = await readDb();
+        const nextIdx = (dbState.current_run?.currentAngleIndex || 0) + 2;
+        await bot.editMessageText(`Carousel (${runId}) - Regenerating using Angle #${nextIdx}...`, { chat_id: chatId, message_id: message.message_id });
 
         await regenerateRun(runId);
       }
@@ -384,7 +386,7 @@ async function executePipeline(timeSlot, chatId) {
 
     // 2. Cache run angles in db for regeneration
     const runId = `run-${Date.now()}`;
-    const db = readDb();
+    const db = await readDb();
     db.current_run = {
       runId,
       timeSlot,
@@ -392,7 +394,7 @@ async function executePipeline(timeSlot, chatId) {
       currentAngleIndex: 0,
       chatId
     };
-    writeDb(db);
+    await writeDb(db);
 
     // 3. Generate copy for Slide 1 (Angle #1) using fallback helper
     if (!isManualWeb && bot) {
@@ -407,7 +409,7 @@ async function executePipeline(timeSlot, chatId) {
     const renderResult = await renderCarouselPngs(slidesData);
 
     // Add pending history entry
-    addHistoryEntry({
+    await addHistoryEntry({
       id: runId,
       timeSlot,
       status: 'pending',
@@ -501,8 +503,8 @@ const publicDir = path.join(__dirname, '../public');
 app.use(express.static(publicDir));
 
 // API: System Status
-app.get('/api/status', (req, res) => {
-  const db = readDb();
+app.get('/api/status', async (req, res) => {
+  const db = await readDb();
   const options = { timeZone: 'Asia/Kolkata', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric', hour12: false };
   const formatter = new Intl.DateTimeFormat('en-US', options);
   const istTimeStr = formatter.format(new Date());
@@ -524,8 +526,8 @@ app.get('/api/status', (req, res) => {
 });
 
 // API: Run History & KPI Stats
-app.get('/api/history', (req, res) => {
-  const db = readDb();
+app.get('/api/history', async (req, res) => {
+  const db = await readDb();
   const history = db.history || [];
 
   // Calculate analytics
