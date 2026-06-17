@@ -407,7 +407,7 @@ export async function scrapeTrending(timeSlot) {
   console.log(`Fetched raw count: ${allStories.length} stories`);
 
   // Deduplicate and filter out recent historical duplicates
-  const db = readDb();
+  const db = await readDb();
   const seenUrls = new Set();
   const uniqueStories = [];
   
