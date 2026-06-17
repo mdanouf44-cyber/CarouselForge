@@ -27,11 +27,12 @@ export async function initDb() {
   }
   
   try {
+    // Check if the table exists by selecting 1 row. Using limit(1) instead of single()
+    // prevents errors when the table exists but contains 0 rows.
     const { data, error } = await supabase
       .from('current_run')
       .select('id')
-      .eq('id', 1)
-      .single();
+      .limit(1);
 
     if (error) {
       console.error('Failed to query Supabase (check if tables exist):', error.message);
@@ -61,16 +62,18 @@ export async function readDb() {
       console.error('Error reading history from Supabase:', historyErr.message);
     }
 
-    // 2. Fetch current active run state
-    const { data: runData, error: runErr } = await supabase
+    // 2. Fetch current active run state. Using select().eq() instead of single()
+    // gracefully returns an empty list instead of throwing an error when 0 rows exist.
+    const { data: runDataList, error: runErr } = await supabase
       .from('current_run')
       .select('*')
-      .eq('id', 1)
-      .single();
+      .eq('id', 1);
 
-    if (runErr && runErr.code !== 'PGRST116') { // PGRST116 is single row empty result
+    if (runErr) {
       console.error('Error reading current_run from Supabase:', runErr.message);
     }
+
+    const runData = runDataList && runDataList.length > 0 ? runDataList[0] : null;
 
     // Map database fields to application shape
     return {
@@ -105,34 +108,36 @@ export async function writeDb(data) {
   try {
     const run = data.current_run;
     if (!run) {
-      // Clear active run state
+      // Clear active run state. We use upsert so that it works even if the row with ID 1
+      // was never seeded.
       const { error } = await supabase
         .from('current_run')
-        .update({
+        .upsert({
+          id: 1,
           run_id: null,
           time_slot: null,
           angles: null,
           current_angle_index: 0,
           chat_id: null,
           updated_at: new Date()
-        })
-        .eq('id', 1);
+        });
       
       if (error) console.error('Error clearing active run:', error.message);
       return;
     }
 
+    // Use upsert to create or update the row with ID 1
     const { error } = await supabase
       .from('current_run')
-      .update({
+      .upsert({
+        id: 1,
         run_id: run.runId,
         time_slot: run.timeSlot,
         angles: run.angles,
         current_angle_index: run.currentAngleIndex,
         chat_id: run.chatId,
         updated_at: new Date()
-      })
-      .eq('id', 1);
+      });
 
     if (error) {
       console.error('Error updating active run in Supabase:', error.message);
