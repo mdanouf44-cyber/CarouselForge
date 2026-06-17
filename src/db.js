@@ -283,3 +283,89 @@ export async function updateHistoryStatus(id, status, extraFields = {}) {
     return false;
   }
 }
+
+// Automatically clean up history entries and storage files older than 7 days
+export async function cleanupOldHistoryEntries() {
+  if (!supabase) return;
+  
+  try {
+    console.log('[Cleanup] Running weekly database and storage cleanup check...');
+    
+    // Calculate date threshold (7 days ago)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    // Fetch entries older than 7 days
+    const { data: oldEntries, error: fetchErr } = await supabase
+      .from('carousel_history')
+      .select('id, image_paths')
+      .lt('timestamp', sevenDaysAgo.toISOString());
+      
+    if (fetchErr) {
+      console.error('[Cleanup] Failed to fetch old entries:', fetchErr.message);
+      return;
+    }
+    
+    if (!oldEntries || oldEntries.length === 0) {
+      console.log('[Cleanup] No old entries found to clean up.');
+      return;
+    }
+    
+    console.log(`[Cleanup] Found ${oldEntries.length} entries older than 7 days. Starting cleanup...`);
+    
+    for (const entry of oldEntries) {
+      const runId = entry.id;
+      
+      // 1. Delete files in Supabase Storage bucket for this run
+      const { data: files, error: listErr } = await supabase.storage
+        .from('carousel-images')
+        .list(runId);
+        
+      if (listErr) {
+        console.error(`[Cleanup] Failed to list files for storage folder ${runId}:`, listErr.message);
+      } else if (files && files.length > 0) {
+        const filesToRemove = files.map(file => `${runId}/${file.name}`);
+        console.log(`[Cleanup] Removing ${filesToRemove.length} images from Supabase Storage for run ${runId}...`);
+        const { error: removeErr } = await supabase.storage
+          .from('carousel-images')
+          .remove(filesToRemove);
+          
+        if (removeErr) {
+          console.error(`[Cleanup] Failed to remove files for folder ${runId}:`, removeErr.message);
+        }
+      }
+      
+      // Clean up local dist files if they exist (just in case they are local file paths)
+      if (entry.image_paths && entry.image_paths.length > 0) {
+        const firstPath = entry.image_paths[0];
+        if (firstPath && !firstPath.startsWith('http://') && !firstPath.startsWith('https://')) {
+          const runDir = path.dirname(firstPath);
+          try {
+            if (fs.existsSync(runDir)) {
+              fs.rmSync(runDir, { recursive: true, force: true });
+              console.log(`[Cleanup] Cleaned up local directory: ${runDir}`);
+            }
+          } catch (localErr) {
+            console.warn(`[Cleanup] Failed to remove local run directory ${runDir}:`, localErr.message);
+          }
+        }
+      }
+      
+      // 2. Delete database entry
+      const { error: deleteErr } = await supabase
+        .from('carousel_history')
+        .delete()
+        .eq('id', runId);
+        
+      if (deleteErr) {
+        console.error(`[Cleanup] Failed to delete database history entry ${runId}:`, deleteErr.message);
+      } else {
+        console.log(`[Cleanup] Successfully deleted history entry ${runId} from database.`);
+      }
+    }
+    
+    console.log('[Cleanup] History and storage cleanup task completed.');
+  } catch (err) {
+    console.error('[Cleanup] Error during history cleanup:', err.message);
+  }
+}

@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 import { scrapeTrending, getIstBoundaries } from './scraper.js';
 import { generateCarouselContent } from './generator.js';
 import { renderCarouselPngs } from './renderer.js';
-import { readDb, writeDb, addHistoryEntry, updateHistoryStatus, initDb } from './db.js';
+import { readDb, writeDb, addHistoryEntry, updateHistoryStatus, initDb, cleanupOldHistoryEntries } from './db.js';
 
 dotenv.config();
 
@@ -523,6 +523,18 @@ if (!token || !defaultChatId) {
 
   console.log('Asia/Kolkata Scheduler initialized for 08:00 AM and 08:00 PM daily runs.');
 }
+
+// Database/Storage Cleanup Cron: Runs every day at 12:00 AM Midnight IST
+// Automatically deletes history entries and Supabase Storage files older than 7 days
+cron.schedule('0 0 * * *', () => {
+  console.log('Daily database and storage cleanup cron triggered...');
+  cleanupOldHistoryEntries().catch(console.error);
+}, {
+  timezone: 'Asia/Kolkata'
+});
+
+// Run initial cleanup check immediately on server startup
+cleanupOldHistoryEntries().catch(console.error);
 
 // ==========================================
 // EXPRESS HTTP WEB DASHBOARD SERVER
