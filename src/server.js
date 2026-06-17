@@ -89,7 +89,7 @@ async function getSlidesContent(story, timeSlot) {
 // CORE REUSABLE ACTION HELPERS
 // ==========================================
 
-export async function approveRun(runId) {
+export async function approveRun(runId, updatedSlides = null, updatedLinkedinPost = null) {
   const db = await readDb();
   const entryIndex = db.history.findIndex(h => h.id === runId && h.status === 'pending');
 
@@ -102,6 +102,38 @@ export async function approveRun(runId) {
   }
 
   const entry = db.history[entryIndex];
+
+  // If slide or caption content was edited on the dashboard, update and re-render
+  if (updatedSlides) {
+    entry.slides = updatedSlides;
+  }
+  if (updatedLinkedinPost !== null && updatedLinkedinPost !== undefined) {
+    entry.linkedin_post = updatedLinkedinPost;
+  }
+
+  if (updatedSlides) {
+    console.log(`[Approve] Re-rendering slide PNGs for ${runId} due to custom content edits...`);
+    
+    // Clean up the old temp run directory before re-rendering
+    if (entry.imagePaths && entry.imagePaths.length > 0) {
+      const oldRunDir = path.dirname(entry.imagePaths[0]);
+      try {
+        if (fs.existsSync(oldRunDir)) {
+          fs.rmSync(oldRunDir, { recursive: true, force: true });
+        }
+      } catch (err) {
+        console.warn(`Failed to clean up old temp run directory ${oldRunDir}:`, err.message);
+      }
+    }
+
+    const renderResult = await renderCarouselPngs({
+      date: entry.angle?.publishedAt ? new Date(entry.angle.publishedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      linkedin_post: entry.linkedin_post,
+      slides: entry.slides
+    });
+    entry.imagePaths = renderResult.imagePaths;
+  }
+
   const approvedDir = path.join(__dirname, `../dist/approved/run-${runId}`);
   fs.mkdirSync(approvedDir, { recursive: true });
 
@@ -114,8 +146,13 @@ export async function approveRun(runId) {
     newPaths.push(newPath);
   }
 
-  // Update history entry status
-  await updateHistoryStatus(runId, 'approved', { imagePaths: newPaths });
+  // Update history entry status & fields in Supabase
+  await updateHistoryStatus(runId, 'approved', { 
+    imagePaths: newPaths,
+    linkedin_post: entry.linkedin_post,
+    slides: entry.slides
+  });
+  
   return { status: 'approved', approvedDir };
 }
 
@@ -565,7 +602,7 @@ app.post('/api/trigger', (req, res) => {
 
 // API: Curation Action Panel (Approve/Reject/Regenerate)
 app.post('/api/action', async (req, res) => {
-  const { action, runId } = req.body;
+  const { action, runId, slides, linkedin_post } = req.body;
 
   if (!action || !runId) {
     return res.status(400).json({ error: 'Missing action or runId in request body.' });
@@ -574,7 +611,7 @@ app.post('/api/action', async (req, res) => {
   try {
     let result;
     if (action === 'approve') {
-      result = await approveRun(runId);
+      result = await approveRun(runId, slides, linkedin_post);
     } else if (action === 'reject') {
       result = await rejectRun(runId);
     } else if (action === 'regen') {

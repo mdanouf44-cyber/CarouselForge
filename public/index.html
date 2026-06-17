@@ -155,7 +155,17 @@
                 <span>📝 Generated LinkedIn Post Copy</span>
                 <button class="btn-copy-post" id="btn-copy-post">Copy Text</button>
               </div>
-              <textarea class="post-textarea" id="post-caption-textarea" readonly placeholder="No LinkedIn caption generated for this run."></textarea>
+              <textarea class="post-textarea" id="post-caption-textarea" placeholder="No LinkedIn caption generated for this run."></textarea>
+            </div>
+
+            <!-- Slide Text Editor -->
+            <div class="glass-panel slide-editor-panel" style="margin-top: 25px; margin-bottom: 25px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-panel); border-radius: 14px; padding: 20px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600; color: var(--text-primary);">
+                <span>🎚️ Edit Slides Text Content</span>
+              </div>
+              <div id="slide-text-fields-container" style="display: flex; flex-direction: column; gap: 15px;">
+                <!-- Slides inputs dynamically loaded here -->
+              </div>
             </div>
 
             <!-- Curative Actions Panel -->
@@ -219,6 +229,22 @@
       <div class="modal-slides-grid" id="modal-slides-container">
         <!-- 6 PNG images displayed in a grid for scanning -->
       </div>
+      
+      <!-- Historical Post & Slides Text Content -->
+      <div id="modal-text-content" style="border-top: 1px solid var(--border-panel); padding-top: 15px; display: flex; flex-direction: column; gap: 20px;">
+        <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-panel); border-radius: 12px; padding: 15px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-weight: 600; font-size: 13.5px; color: var(--text-primary);">
+            <span>📝 LinkedIn Post Caption</span>
+            <button class="btn-copy-post" id="btn-copy-post-modal">Copy Text</button>
+          </div>
+          <textarea id="modal-post-caption" readonly style="width: 100%; height: 120px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-panel); border-radius: 8px; padding: 10px; color: var(--text-primary); font-size: 13.5px; resize: none; line-height: 1.5; font-family: inherit;"></textarea>
+        </div>
+        <div style="font-weight: 600; font-size: 13.5px; color: var(--text-primary);">🎚️ Slides Text Content</div>
+        <div id="modal-slides-text-container" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; max-height: 200px; overflow-y: auto; padding-right: 5px;">
+          <!-- Slides text cards will be injected here -->
+        </div>
+      </div>
+
       <div class="modal-footer">
         <span id="modal-folder-path">Folder: dist/approved/run-xxx</span>
         <button class="btn-copy-post" id="btn-download-zip-modal" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 13px;">📥 Download ZIP</button>

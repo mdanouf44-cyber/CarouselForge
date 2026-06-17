@@ -192,6 +192,9 @@ export async function updateHistoryStatus(id, status, extraFields = {}) {
     if (extraFields.linkedin_post) {
       updateData.linkedin_post = extraFields.linkedin_post;
     }
+    if (extraFields.slides) {
+      updateData.slides = extraFields.slides;
+    }
 
     const { error } = await supabase
       .from('carousel_history')

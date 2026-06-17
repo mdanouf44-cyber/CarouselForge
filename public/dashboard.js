@@ -94,13 +94,74 @@ async function fetchHistory(isAutoRefresh = false) {
   }
 }
 
+// Populate Slide Text Editor with editable fields
+function populateSlideTextEditor(slides) {
+  const container = document.getElementById('slide-text-fields-container');
+  container.innerHTML = '';
+  
+  if (!slides || slides.length === 0) {
+    container.innerHTML = '<p class="text-muted" style="font-size: 13px;">No slide content available to edit.</p>';
+    return;
+  }
+  
+  slides.forEach((slide, idx) => {
+    const slideDiv = document.createElement('div');
+    slideDiv.className = 'slide-editor-card';
+    slideDiv.style = 'background: rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.03); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 5px;';
+    
+    const label = document.createElement('div');
+    label.style = 'font-size: 11px; font-weight: 700; color: var(--indigo-accent); text-transform: uppercase; letter-spacing: 0.5px;';
+    label.textContent = `Slide ${idx + 1} (${slide.type.toUpperCase()})`;
+    slideDiv.appendChild(label);
+    
+    if (slide.type === 'intro' || slide.type === 'outro') {
+      // Headline
+      const headlineGroup = document.createElement('div');
+      headlineGroup.style = 'display: flex; flex-direction: column; gap: 4px;';
+      headlineGroup.innerHTML = `
+        <label style="font-size: 10px; color: var(--text-secondary);">Headline</label>
+        <input type="text" class="slide-input-headline" data-idx="${idx}" value="${slide.headline || ''}" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-panel); border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 13px;">
+      `;
+      slideDiv.appendChild(headlineGroup);
+      
+      // Subheadline
+      const subheadlineGroup = document.createElement('div');
+      subheadlineGroup.style = 'display: flex; flex-direction: column; gap: 4px;';
+      subheadlineGroup.innerHTML = `
+        <label style="font-size: 10px; color: var(--text-secondary);">Subheadline</label>
+        <input type="text" class="slide-input-subheadline" data-idx="${idx}" value="${slide.subheadline || ''}" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-panel); border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 13px;">
+      `;
+      slideDiv.appendChild(subheadlineGroup);
+    } else {
+      // Title
+      const titleGroup = document.createElement('div');
+      titleGroup.style = 'display: flex; flex-direction: column; gap: 4px;';
+      titleGroup.innerHTML = `
+        <label style="font-size: 10px; color: var(--text-secondary);">Title</label>
+        <input type="text" class="slide-input-title" data-idx="${idx}" value="${slide.title || ''}" style="width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--border-panel); border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 13px;">
+      `;
+      slideDiv.appendChild(titleGroup);
+      
+      // Content
+      const contentGroup = document.createElement('div');
+      contentGroup.style = 'display: flex; flex-direction: column; gap: 4px;';
+      contentGroup.innerHTML = `
+        <label style="font-size: 10px; color: var(--text-secondary);">Content</label>
+        <textarea class="slide-input-content" data-idx="${idx}" style="width: 100%; height: 60px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-panel); border-radius: 6px; padding: 8px; color: var(--text-primary); font-size: 13px; resize: none; font-family: inherit; line-height: 1.4;">${slide.content || ''}</textarea>
+      `;
+      slideDiv.appendChild(contentGroup);
+    }
+    
+    container.appendChild(slideDiv);
+  });
+}
+
 // Render Curation Workspace with the active pending run
 function renderCurationWorkspace(run) {
   activeRunId = run.id;
   isCurationActive = true;
   
-  activeRunDetails.title = run.angle.title;
-  activeRunDetails.imagePaths = run.imagePaths || [];
+  activeRunDetails = run; // Save the full run details object
   
   document.getElementById('curation-empty').classList.add('hidden');
   document.getElementById('curation-content').classList.remove('hidden');
@@ -111,6 +172,9 @@ function renderCurationWorkspace(run) {
   
   // Populate generated LinkedIn post copy
   document.getElementById('post-caption-textarea').value = run.linkedin_post || '';
+  
+  // Populate Slide Text Editor
+  populateSlideTextEditor(run.slides);
   
   // Sources URL links
   const sourcesContainer = document.getElementById('story-sources');
@@ -138,7 +202,7 @@ function renderCurationWorkspace(run) {
       <img src="${getImageUrl(path)}" alt="Slide ${idx + 1}">
     `;
     // Click thumbnail to expand preview
-    thumb.addEventListener('click', () => openPreviewModal(run.angle.title, run.imagePaths));
+    thumb.addEventListener('click', () => openPreviewModal(run));
     deck.appendChild(thumb);
   });
 }
@@ -151,6 +215,7 @@ function clearCurationWorkspace() {
   document.getElementById('curation-content').classList.add('hidden');
   document.getElementById('curation-empty').classList.remove('hidden');
   document.getElementById('post-caption-textarea').value = '';
+  document.getElementById('slide-text-fields-container').innerHTML = '';
 }
 
 // Render the historical archive table logs
@@ -199,7 +264,7 @@ function renderHistoryTable(history) {
     
     // Row click event opens the modal preview
     tr.addEventListener('click', () => {
-      openPreviewModal(h.angle.title, h.imagePaths);
+      openPreviewModal(h);
     });
 
     tbody.appendChild(tr);
@@ -232,6 +297,48 @@ async function triggerPipeline(slot) {
   }
 }
 
+// Gather edited text data from the curation fields
+function getEditedCurationData() {
+  const linkedinPost = document.getElementById('post-caption-textarea').value;
+  
+  const headlineInputs = document.querySelectorAll('.slide-input-headline');
+  const subheadlineInputs = document.querySelectorAll('.slide-input-subheadline');
+  const titleInputs = document.querySelectorAll('.slide-input-title');
+  const contentInputs = document.querySelectorAll('.slide-input-content');
+  
+  const updatedSlides = [];
+  
+  for (let idx = 0; idx < 5; idx++) {
+    const isIntroOrOutro = idx === 0 || idx === 4;
+    if (isIntroOrOutro) {
+      const headlineEl = Array.from(headlineInputs).find(input => parseInt(input.dataset.idx, 10) === idx);
+      const subheadlineEl = Array.from(subheadlineInputs).find(input => parseInt(input.dataset.idx, 10) === idx);
+      
+      updatedSlides.push({
+        slide_number: idx + 1,
+        type: idx === 0 ? 'intro' : 'outro',
+        headline: headlineEl ? headlineEl.value : '',
+        subheadline: subheadlineEl ? subheadlineEl.value : ''
+      });
+    } else {
+      const titleEl = Array.from(titleInputs).find(input => parseInt(input.dataset.idx, 10) === idx);
+      const contentEl = Array.from(contentInputs).find(input => parseInt(input.dataset.idx, 10) === idx);
+      
+      updatedSlides.push({
+        slide_number: idx + 1,
+        type: idx === 1 ? 'story' : (idx === 2 ? 'deep_dive' : 'impact'),
+        title: titleEl ? titleEl.value : '',
+        content: contentEl ? contentEl.value : ''
+      });
+    }
+  }
+  
+  return {
+    slides: updatedSlides,
+    linkedin_post: linkedinPost
+  };
+}
+
 // Execute curation action panel (Approve / Reject / Regenerate)
 async function submitCurationAction(action) {
   if (!activeRunId) {
@@ -250,11 +357,18 @@ async function submitCurationAction(action) {
 
   logToTerminal(`Submitting curation action "${action.toUpperCase()}" for run ${activeRunId}...`, 'SYSTEM');
 
+  const bodyData = { action, runId: activeRunId };
+  if (action === 'approve') {
+    const edited = getEditedCurationData();
+    bodyData.slides = edited.slides;
+    bodyData.linkedin_post = edited.linkedin_post;
+  }
+
   try {
     const res = await fetch('/api/action', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, runId: activeRunId })
+      body: JSON.stringify(bodyData)
     });
     const data = await res.json();
 
@@ -336,19 +450,22 @@ async function downloadImagesAsZip(title, imagePaths) {
 // PREVIEW MODAL DIALOG CONTROLS
 // ==========================================
 
-function openPreviewModal(title, imagePaths) {
+function openPreviewModal(run) {
   const modal = document.getElementById('preview-modal');
   const modalTitle = document.getElementById('modal-title');
   const container = document.getElementById('modal-slides-container');
   const pathLabel = document.getElementById('modal-folder-path');
   
+  const title = run.angle?.title || 'Carousel Preview';
+  const imagePaths = run.imagePaths || [];
+  
   currentModalRun.title = title;
-  currentModalRun.imagePaths = imagePaths || [];
+  currentModalRun.imagePaths = imagePaths;
   
   modalTitle.textContent = title;
   container.innerHTML = '';
 
-  if (!imagePaths || imagePaths.length === 0) {
+  if (imagePaths.length === 0) {
     container.innerHTML = `<div class="text-center text-muted" style="grid-column: span 3; padding: 40px;">No slide images available for this record (possibly cleaned up on rejection).</div>`;
     pathLabel.textContent = '';
   } else {
@@ -368,6 +485,41 @@ function openPreviewModal(title, imagePaths) {
     } else {
       pathLabel.textContent = `Location: ${samplePath}`;
     }
+  }
+
+  // Populate the LinkedIn post caption inside modal
+  const modalPostCaption = document.getElementById('modal-post-caption');
+  modalPostCaption.value = run.linkedin_post || '';
+  
+  // Populate slides text inside modal
+  const slidesTextContainer = document.getElementById('modal-slides-text-container');
+  slidesTextContainer.innerHTML = '';
+  
+  if (run.slides && run.slides.length > 0) {
+    run.slides.forEach((slide, idx) => {
+      const slideCard = document.createElement('div');
+      slideCard.style = 'background: rgba(255,255,255,0.01); border: 1px solid var(--border-panel); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 4px;';
+      
+      const label = document.createElement('div');
+      label.style = 'font-size: 11px; font-weight: 700; color: var(--indigo-accent); text-transform: uppercase; letter-spacing: 0.5px;';
+      label.textContent = `Slide ${idx + 1} (${slide.type.toUpperCase()})`;
+      slideCard.appendChild(label);
+      
+      if (slide.type === 'intro' || slide.type === 'outro') {
+        slideCard.innerHTML += `
+          <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">${slide.headline || ''}</div>
+          <div style="font-size: 11px; color: var(--text-secondary);">${slide.subheadline || ''}</div>
+        `;
+      } else {
+        slideCard.innerHTML += `
+          <div style="font-size: 12px; font-weight: 600; color: var(--text-primary);">${slide.title || ''}</div>
+          <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4;">${slide.content || ''}</div>
+        `;
+      }
+      slidesTextContainer.appendChild(slideCard);
+    });
+  } else {
+    slidesTextContainer.innerHTML = '<div style="grid-column: span 2; font-size: 12px; color: var(--text-muted);">No slide text content available for this record.</div>';
   }
   
   modal.classList.remove('hidden');
@@ -447,6 +599,30 @@ document.addEventListener('DOMContentLoaded', () => {
         btnCopy.style.background = '';
         btnCopy.style.color = '';
         btnCopy.style.borderColor = '';
+      }, 2000);
+    }).catch(err => {
+      console.error('Failed to copy text:', err);
+    });
+  });
+
+  // LinkedIn Post Caption Copy Button (Modal version)
+  const btnCopyModal = document.getElementById('btn-copy-post-modal');
+  btnCopyModal.addEventListener('click', () => {
+    const textarea = document.getElementById('modal-post-caption');
+    if (!textarea.value) return;
+    
+    navigator.clipboard.writeText(textarea.value).then(() => {
+      const originalText = btnCopyModal.textContent;
+      btnCopyModal.textContent = 'Copied! ✓';
+      btnCopyModal.style.background = 'var(--success-glow)';
+      btnCopyModal.style.color = 'var(--success)';
+      btnCopyModal.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+      
+      setTimeout(() => {
+        btnCopyModal.textContent = originalText;
+        btnCopyModal.style.background = '';
+        btnCopyModal.style.color = '';
+        btnCopyModal.style.borderColor = '';
       }, 2000);
     }).catch(err => {
       console.error('Failed to copy text:', err);
