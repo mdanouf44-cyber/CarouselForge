@@ -8,9 +8,10 @@
   <!-- Premium Fonts CDN -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
   
   <link rel="stylesheet" href="dashboard.css">
+  <link rel="stylesheet" href="/templates/slide.css">
 </head>
 <body>
   
@@ -79,6 +80,90 @@
         <div class="glass-panel console-panel">
           <h2>Orchestrator Controls</h2>
           <p class="panel-desc">Manually trigger automated scraping, ranking, and rendering pipelines for any timeslot.</p>
+          
+          <!-- Custom Topic Input Section [NEW] -->
+          <div class="custom-topic-container" style="margin-bottom: 20px;">
+            <label for="input-custom-topic" class="theme-selector-label" style="display: block; margin-bottom: 8px; font-weight: 500; font-size: 13.5px; color: var(--text-primary);">💡 Custom Topic Generator</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="input-custom-topic" class="search-input" style="flex-grow: 1; margin: 0; padding: 10px 14px; background: rgba(0, 0, 0, 0.2); border: 1px solid var(--border-panel); border-radius: 8px; color: var(--text-primary); font-size: 13.5px;" placeholder="Enter topic (e.g. 5 tips for clean JavaScript)...">
+              <button class="btn btn-primary" id="btn-generate-custom" style="padding: 10px 16px; border-radius: 8px; font-size: 13.5px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; height: auto;">
+                <span>Generate</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Visual Theme Selector Dropdown -->
+          <div class="theme-selector-container">
+            <label for="select-theme" class="theme-selector-label">Select Visual Theme Style</label>
+            <select id="select-theme" class="theme-select">
+              <option value="default">🌌 Alternating Obsidian (Default)</option>
+              <option value="custom">🎨 Create Custom Brand Theme...</option>
+              <option value="r1">🕶️ Theme R1: Minimalist Obsidian Dark</option>
+              <option value="r2">💙 Theme R2: Structured Corporate Dark</option>
+              <option value="r3">🤍 Theme R3: Elegant Studio Light</option>
+              <option value="r4">🤎 Theme R4: Warm Serif Editorial</option>
+              <option value="dark">🕶️ Standard Pure Dark Mode</option>
+              <option value="light">☀️ Standard Pure Light Mode</option>
+              <option value="ocean">🌊 Standard Ocean Breeze</option>
+              <option value="sunset">🌆 Standard Neon Sunset</option>
+              <option value="forest">🌲 Standard Forest Mint</option>
+            </select>
+          </div>
+
+          <!-- Brand Customizer Panel [NEW] -->
+          <div class="brand-customizer-panel hidden" id="brand-customizer" style="margin-top: 15px; margin-bottom: 15px; padding: 15px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-panel); border-radius: 10px;">
+            <div class="customizer-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid var(--border-panel); padding-bottom: 8px;">
+              <span style="font-weight: 600; font-size: 13.5px; color: var(--text-primary);">🎨 Custom Brand Palette</span>
+              <button id="btn-reset-customizer" style="background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 11px;">Reset Defaults</button>
+            </div>
+            <div class="customizer-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 6px;">
+              <div>
+                <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Background</label>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <input type="color" id="picker-bg" value="#0F0F1A" style="width: 28px; height: 28px; border: none; border-radius: 4px; background: none; cursor: pointer;">
+                  <input type="text" id="hex-bg" value="#0F0F1A" style="font-size: 11px; width: 65px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-panel); border-radius: 4px; padding: 4px; color: #fff; text-align: center;">
+                </div>
+              </div>
+              <div>
+                <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Primary Text</label>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <input type="color" id="picker-text-primary" value="#F9FAFB" style="width: 28px; height: 28px; border: none; border-radius: 4px; background: none; cursor: pointer;">
+                  <input type="text" id="hex-text-primary" value="#F9FAFB" style="font-size: 11px; width: 65px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-panel); border-radius: 4px; padding: 4px; color: #fff; text-align: center;">
+                </div>
+              </div>
+              <div>
+                <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Secondary Text</label>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <input type="color" id="picker-text-secondary" value="#9CA3AF" style="width: 28px; height: 28px; border: none; border-radius: 4px; background: none; cursor: pointer;">
+                  <input type="text" id="hex-text-secondary" value="#9CA3AF" style="font-size: 11px; width: 65px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-panel); border-radius: 4px; padding: 4px; color: #fff; text-align: center;">
+                </div>
+              </div>
+              <div>
+                <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Accent Highlight</label>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <input type="color" id="picker-accent" value="#6366F1" style="width: 28px; height: 28px; border: none; border-radius: 4px; background: none; cursor: pointer;">
+                  <input type="text" id="hex-accent" value="#6366F1" style="font-size: 11px; width: 65px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-panel); border-radius: 4px; padding: 4px; color: #fff; text-align: center;">
+                </div>
+              </div>
+              <div>
+                <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Brand Secondary</label>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <input type="color" id="picker-secondary" value="#EC4899" style="width: 28px; height: 28px; border: none; border-radius: 4px; background: none; cursor: pointer;">
+                  <input type="text" id="hex-secondary" value="#EC4899" style="font-size: 11px; width: 65px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-panel); border-radius: 4px; padding: 4px; color: #fff; text-align: center;">
+                </div>
+              </div>
+              <div>
+                <label style="font-size: 11px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Brand Font</label>
+                <select id="select-custom-font" class="theme-select" style="padding: 4px 8px; font-size: 12px; margin-top: 4px; height: 28px; background: rgba(0,0,0,0.3);">
+                  <option value="Outfit">Outfit (Geometric Sans)</option>
+                  <option value="Inter">Inter (Clean Sans)</option>
+                  <option value="Playfair Display">Playfair Display (Serif)</option>
+                  <option value="Bebas Neue">Bebas Neue (Bold Impact)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
           <div class="console-actions">
             <button class="btn btn-primary btn-glow-indigo" id="btn-trigger-am">
               <span class="btn-icon">☀️</span>
@@ -171,10 +256,13 @@
             <!-- Curative Actions Panel -->
             <div class="curation-action-buttons">
               <button class="btn btn-action-approve" id="btn-approve">
-                <span class="btn-symbol">✓</span> Approve & Save to Output
+                <span class="btn-symbol">✓</span> Approve & Save
               </button>
               <button class="btn btn-action-download" id="btn-download-zip-active">
                 <span class="btn-symbol">📥</span> Download ZIP
+              </button>
+              <button class="btn btn-action-download-pdf" id="btn-download-pdf-active" style="background: linear-gradient(135deg, #FF5A5F 0%, #D32F2F 100%); color: white; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
+                <span class="btn-symbol">📄</span> Download PDF
               </button>
               <button class="btn btn-action-regen" id="btn-regen">
                 <span class="btn-symbol">↻</span> Regenerate Next Angle
@@ -203,11 +291,12 @@
                   <th>Topic</th>
                   <th>Date Created</th>
                   <th>Status</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody id="history-tbody">
                 <tr>
-                  <td colspan="4" class="text-center">Loading runs...</td>
+                  <td colspan="5" class="text-center">Loading runs...</td>
                 </tr>
               </tbody>
             </table>
@@ -245,9 +334,11 @@
         </div>
       </div>
 
-      <div class="modal-footer">
-        <span id="modal-folder-path">Folder: dist/approved/run-xxx</span>
-        <button class="btn-copy-post" id="btn-download-zip-modal" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 13px;">📥 Download ZIP</button>
+      <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end; align-items: center; width: 100%;">
+        <span id="modal-folder-path" style="margin-right: auto; font-size: 12px; color: var(--text-secondary);">Folder: dist/approved/run-xxx</span>
+        <button class="btn" id="btn-load-workspace-modal" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 13px; background: rgba(99, 102, 241, 0.15); border: 1px solid var(--brand-accent); color: var(--brand-accent); border-radius: 8px; cursor: pointer; font-weight: 600;">✏️ Load in Workspace</button>
+        <button class="btn-copy-post" id="btn-download-pdf-modal" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 13px; background: linear-gradient(135deg, #FF5A5F 0%, #D32F2F 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">📄 Download PDF</button>
+        <button class="btn-copy-post" id="btn-download-zip-modal" style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; font-size: 13px; border-radius: 8px; cursor: pointer;">📥 Download ZIP</button>
       </div>
     </div>
   </div>

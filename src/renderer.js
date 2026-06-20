@@ -39,19 +39,75 @@ function findChromeExecutable() {
   throw new Error('Could not find Google Chrome or Microsoft Edge installed on your Windows machine. Please install Chrome or specify custom path.');
 }
 
+// Helper function to format markdown-style bold text to HTML strong tags
+function formatMarkdown(text) {
+  if (!text) return '';
+  return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+}
+
 // Generate the HTML for slides dynamically based on the AI output
 function buildSlidesHtml(slidesData, brandHandle, authorName) {
+  const theme = slidesData.theme || 'default';
+  let themeClass = `theme-${theme}`;
+  let customStyleAttr = '';
+  
+  if (typeof theme === 'string' && theme.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(theme);
+      themeClass = 'theme-custom';
+      let fontStack = "'Inter', sans-serif";
+      if (parsed.font === 'serif' || parsed.font === 'Playfair Display') {
+        fontStack = "'Playfair Display', Georgia, serif";
+      } else if (parsed.font === 'outfit' || parsed.font === 'Outfit') {
+        fontStack = "'Outfit', sans-serif";
+      } else if (parsed.font === 'bebas' || parsed.font === 'Bebas Neue') {
+        fontStack = "'Bebas Neue', sans-serif";
+      }
+      customStyleAttr = `style="` +
+        `--brand-bg: ${parsed.bg || '#0F0F1A'}; ` +
+        `--brand-text-primary: ${parsed.textPrimary || '#F9FAFB'}; ` +
+        `--brand-text-secondary: ${parsed.textSecondary || '#9CA3AF'}; ` +
+        `--brand-accent: ${parsed.accent || '#6366F1'}; ` +
+        `--brand-secondary: ${parsed.brandSecondary || '#EC4899'}; ` +
+        `font-family: ${fontStack} !important;"`;
+    } catch (err) {
+      console.error('Failed to parse custom theme JSON in buildSlidesHtml:', err.message);
+    }
+  }
+
+  const totalSlides = slidesData.slides.length;
+
   return slidesData.slides.map((slide, index) => {
     const slideNumStr = String(slide.slide_number).padStart(2, '0');
+    const progressPercent = (index / (totalSlides - 1 || 1)) * 100;
 
-    // Theme rules:
-    // Slides 1 (index 0), 2 (index 1), 5 (index 4) are Dark
-    // Slides 3 (index 2), 4 (index 3) are Light
-    const isDark = index === 0 || index === 1 || index === 4;
-    const themeClass = isDark ? 'slide-theme-dark' : 'slide-theme-light';
+    // Determine light vs dark category classes
+    let isDark;
+    if (theme === 'light' || theme === 'r3' || theme === 'r4') {
+      isDark = false; // Light/warm background themes
+    } else if (theme === 'dark' || theme === 'ocean' || theme === 'sunset' || theme === 'forest' || theme === 'r1' || theme === 'r2') {
+      isDark = true;  // Dark background themes
+    } else if (themeClass === 'theme-custom') {
+      try {
+        const parsed = JSON.parse(theme);
+        const bg = parsed.bg || '#0F0F1A';
+        const hex = bg.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        isDark = brightness < 128;
+      } catch (e) {
+        isDark = true;
+      }
+    } else {
+      // 'default' (alternating Obsidian)
+      isDark = index === 0 || index === 1 || index === 4;
+    }
+    const slideThemeClass = isDark ? 'slide-theme-dark' : 'slide-theme-light';
 
     // Outro slide (index 4) specific layout tweaks
-    const isOutro = index === 4;
+    const isOutro = index === totalSlides - 1;
     const accentBarClass = isOutro ? 'accent-bar-top' : 'accent-bar-bottom';
     const contentAreaClass = isOutro ? 'slide-content-area-outro' : '';
     const titleClass = isOutro || index === 0 ? 'slide-title-large' : 'slide-title-body';
@@ -78,19 +134,57 @@ function buildSlidesHtml(slidesData, brandHandle, authorName) {
       bodyText = slide.content || '';
     }
 
+    // Format markdown bold text (convert **text** to <strong>text</strong>)
+    titleText = formatMarkdown(titleText);
+    bodyText = formatMarkdown(bodyText);
+
     return `
-      <div class="slide ${themeClass}">
+      <div class="slide ${themeClass} ${slideThemeClass} slide-index-${index}" ${customStyleAttr}>
+        <div class="slide-backdrop-num">${slideNumStr}</div>
+        
+        <div class="slide-top-line-container">
+          <div class="slide-top-line-left"></div>
+          <div class="slide-top-line-number">${slideNumStr}</div>
+          <div class="slide-top-line-right"></div>
+        </div>
+
         <div class="slide-header">
           <div class="brand-handle">${brandHandle}</div>
           <div class="slide-number">${slideNumStr}</div>
+          <div class="slide-number-r1">#2026</div>
+          <div class="slide-number-r3">#${slideNumStr}</div>
         </div>
+        
+        ${index < totalSlides - 1 ? `<div class="slide-swipe-pill">Swipe</div>` : ''}
+        
         <div class="accent-bar ${accentBarClass}"></div>
         <div class="slide-content-area ${contentAreaClass}">
-          <h1 class="${titleClass}">${titleText}</h1>
+          ${theme === 'r4' && index === 0 ? `<div class="slide-title-pre">3 WAYS TO:</div>` : ''}
+          <h1 class="slide-title ${titleClass}">${titleText}</h1>
           <p class="slide-paragraph">${bodyText}</p>
         </div>
+
+        <div class="slide-bottom-line-container">
+          <div class="slide-bottom-line"></div>
+          <div class="slide-bottom-line-arrow">&rarr;</div>
+          <div class="curved-arrow"></div>
+        </div>
+
+        <div class="slide-progress-bar-container">
+          <div class="slide-progress-bar-fill" style="width: ${progressPercent}%;"></div>
+        </div>
+
         <div class="slide-footer">
           <div class="footer-author">${authorName}</div>
+          
+          <div class="footer-author-pill">
+            <span class="name">${authorName}</span>
+          </div>
+
+          <div class="footer-website">${brandHandle.replace(/^(https?:\/\/)?(www\.)?/, '')}</div>
+          <div class="footer-handle">@${authorName.replace(/\s+/g, '').toLowerCase()}</div>
+          
+          <div class="footer-swipe-text">SWIPE</div>
           <div class="footer-icon ${footerIconClass}">${footerIconText}</div>
         </div>
       </div>
@@ -171,11 +265,22 @@ export async function renderCarouselPngs(slidesData) {
       imagePaths.push(slidePath);
     }
 
-    console.log(`Carousel PNGs rendered successfully in: ${runDir}`);
+    // Generate high-DPI vector PDF
+    const pdfPath = path.join(runDir, `carousel.pdf`);
+    console.log(`Generating high-DPI vector PDF at: ${pdfPath}`);
+    await page.pdf({
+      path: pdfPath,
+      width: '1080px',
+      height: '1080px',
+      printBackground: true
+    });
+
+    console.log(`Carousel PNGs and PDF rendered successfully in: ${runDir}`);
     return {
       runId,
       runDir,
-      imagePaths
+      imagePaths,
+      pdfPath
     };
   } catch (error) {
     console.error('Error rendering PNGs with Puppeteer:', error.message);

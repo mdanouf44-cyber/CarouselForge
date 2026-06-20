@@ -34,7 +34,7 @@ export async function uploadImageToStorage(localFilePath, runId, slideName) {
     const { data, error } = await supabase.storage
       .from('carousel-images')
       .upload(storagePath, fileBuffer, {
-        contentType: 'image/png',
+        contentType: slideName.endsWith('.pdf') ? 'application/pdf' : 'image/png',
         upsert: true
       });
 
@@ -121,14 +121,16 @@ export async function readDb() {
         angle: h.angle,
         slides: h.slides,
         imagePaths: h.image_paths || [],
-        linkedin_post: h.linkedin_post
+        linkedin_post: h.linkedin_post,
+        theme: h.theme || 'default'
       })),
       current_run: runData && runData.run_id ? {
         runId: runData.run_id,
         timeSlot: runData.time_slot,
         angles: runData.angles,
         currentAngleIndex: runData.current_angle_index,
-        chatId: runData.chat_id
+        chatId: runData.chat_id,
+        theme: runData.theme || 'default'
       } : null
     };
   } catch (err) {
@@ -172,6 +174,7 @@ export async function writeDb(data) {
         angles: run.angles,
         current_angle_index: run.currentAngleIndex,
         chat_id: run.chatId,
+        theme: run.theme || 'default',
         updated_at: new Date()
       });
 
@@ -191,6 +194,19 @@ export async function addHistoryEntry(entry) {
     const runId = entry.id || `run-${Date.now()}`;
     const remoteUrls = [];
     
+    // Upload PDF to Supabase Storage and store public URL in angle metadata
+    if (entry.angle && entry.angle.pdfPath) {
+      console.log(`[Database] Uploading vector PDF to Supabase Storage...`);
+      const localPdfPath = entry.angle.pdfPath;
+      const pdfFileName = path.basename(localPdfPath);
+      const publicPdfUrl = await uploadImageToStorage(localPdfPath, runId, pdfFileName);
+      if (publicPdfUrl) {
+        entry.angle.pdfUrl = publicPdfUrl;
+      } else {
+        entry.angle.pdfUrl = `/dist/runs/${runId}/${pdfFileName}`;
+      }
+    }
+
     // Upload slide images to Supabase Storage and get public URLs
     if (entry.imagePaths && entry.imagePaths.length > 0) {
       console.log(`[Database] Uploading ${entry.imagePaths.length} slide images to Supabase Storage...`);
@@ -208,14 +224,16 @@ export async function addHistoryEntry(entry) {
 
     const { error } = await supabase
       .from('carousel_history')
-      .insert({
+      .upsert({
         id: runId,
         time_slot: entry.timeSlot,
         status: entry.status,
         angle: entry.angle,
         slides: entry.slides,
         image_paths: remoteUrls,
-        linkedin_post: entry.linkedin_post || ''
+        linkedin_post: entry.linkedin_post || '',
+        theme: entry.theme || 'default',
+        timestamp: new Date()
       });
 
     if (error) {
@@ -267,6 +285,18 @@ export async function updateHistoryStatus(id, status, extraFields = {}) {
     if (extraFields.slides) {
       updateData.slides = extraFields.slides;
     }
+    if (extraFields.theme) {
+      updateData.theme = extraFields.theme;
+    }
+    if (extraFields.angle) {
+      if (extraFields.angle.pdfPath) {
+        const localPdfPath = extraFields.angle.pdfPath;
+        const pdfFileName = path.basename(localPdfPath);
+        const publicPdfUrl = await uploadImageToStorage(localPdfPath, id, pdfFileName);
+        extraFields.angle.pdfUrl = publicPdfUrl || `/dist/approved/run-${id}/${pdfFileName}`;
+      }
+      updateData.angle = extraFields.angle;
+    }
 
     const { error } = await supabase
       .from('carousel_history')
@@ -280,6 +310,77 @@ export async function updateHistoryStatus(id, status, extraFields = {}) {
     return true;
   } catch (err) {
     console.error(`Failed to update status in Supabase for run ${id}:`, err.message);
+    return false;
+  }
+}
+
+export async function deleteHistoryEntry(runId) {
+  if (!supabase) return false;
+
+  try {
+    console.log(`[Delete] Manually deleting history entry and files for run: ${runId}`);
+    
+    // Fetch the entry to check for local / remote image paths
+    const { data: entryData, error: fetchErr } = await supabase
+      .from('carousel_history')
+      .select('image_paths')
+      .eq('id', runId)
+      .limit(1);
+
+    if (fetchErr) {
+      console.error(`[Delete] Failed to fetch entry ${runId}:`, fetchErr.message);
+    }
+
+    // 1. Delete files in Supabase Storage bucket for this run
+    const { data: files, error: listErr } = await supabase.storage
+      .from('carousel-images')
+      .list(runId);
+      
+    if (listErr) {
+      console.error(`[Delete] Failed to list files for storage folder ${runId}:`, listErr.message);
+    } else if (files && files.length > 0) {
+      const filesToRemove = files.map(file => `${runId}/${file.name}`);
+      console.log(`[Delete] Removing ${filesToRemove.length} images from Supabase Storage for run ${runId}...`);
+      const { error: removeErr } = await supabase.storage
+        .from('carousel-images')
+        .remove(filesToRemove);
+        
+      if (removeErr) {
+        console.error(`[Delete] Failed to remove files for folder ${runId}:`, removeErr.message);
+      }
+    }
+    
+    // Clean up local dist files if they exist (just in case they are local file paths)
+    if (entryData && entryData.length > 0 && entryData[0].image_paths && entryData[0].image_paths.length > 0) {
+      const firstPath = entryData[0].image_paths[0];
+      if (firstPath && !firstPath.startsWith('http://') && !firstPath.startsWith('https://')) {
+        const runDir = path.dirname(firstPath);
+        try {
+          if (fs.existsSync(runDir)) {
+            fs.rmSync(runDir, { recursive: true, force: true });
+            console.log(`[Delete] Cleaned up local directory: ${runDir}`);
+          }
+        } catch (localErr) {
+          console.warn(`[Delete] Failed to remove local run directory ${runDir}:`, localErr.message);
+        }
+      }
+    }
+    
+    // 2. Delete database entry
+    const { error: deleteErr } = await supabase
+      .from('carousel_history')
+      .delete()
+      .eq('id', runId);
+      
+    if (deleteErr) {
+      console.error(`[Delete] Failed to delete database history entry ${runId}:`, deleteErr.message);
+      return false;
+    } else {
+      console.log(`[Delete] Successfully deleted history entry ${runId} from database.`);
+      return true;
+    }
+  } catch (err) {
+    console.error(`[Delete] Error during manual history entry deletion:`, err.message);
     return false;
   }
 }

@@ -6,6 +6,7 @@ let activeRunId = null;
 let isCurationActive = false;
 let activeRunDetails = { title: '', imagePaths: [] };
 let currentModalRun = { title: '', imagePaths: [] };
+let activeModalRunObj = null; // Reference to loaded run for interactive archives
 
 // Format local absolute file path to web-served URL
 function getImageUrl(filePath) {
@@ -154,6 +155,9 @@ function populateSlideTextEditor(slides) {
     
     container.appendChild(slideDiv);
   });
+  
+  // Bind input typing event handlers for instantaneous preview updates
+  bindLiveTextListeners();
 }
 
 // Render Curation Workspace with the active pending run
@@ -191,20 +195,8 @@ function renderCurationWorkspace(run) {
     });
   }
 
-  // Render slides thumbnails in horizontal deck
-  const deck = document.getElementById('slides-deck');
-  deck.innerHTML = '';
-  run.imagePaths.forEach((path, idx) => {
-    const thumb = document.createElement('div');
-    thumb.className = 'slide-thumbnail';
-    thumb.innerHTML = `
-      <span class="slide-thumb-label">${idx + 1}/5</span>
-      <img src="${getImageUrl(path)}" alt="Slide ${idx + 1}">
-    `;
-    // Click thumbnail to expand preview
-    thumb.addEventListener('click', () => openPreviewModal(run));
-    deck.appendChild(thumb);
-  });
+  // Render live HTML preview slide simulator
+  renderLivePreviewHtml(run);
 }
 
 // Clear Curation Workspace when no runs are pending
@@ -216,6 +208,30 @@ function clearCurationWorkspace() {
   document.getElementById('curation-empty').classList.remove('hidden');
   document.getElementById('post-caption-textarea').value = '';
   document.getElementById('slide-text-fields-container').innerHTML = '';
+}
+
+async function deleteCarousel(id) {
+  logToTerminal(`Deleting carousel ${id}...`, 'SYSTEM');
+  try {
+    const res = await fetch(`/api/carousel/${id}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    if (data.success) {
+      logToTerminal(`Successfully deleted carousel ${id}`, 'SUCCESS');
+      if (activeRunId === id) {
+        clearCurationWorkspace();
+      }
+      fetchHistory(true);
+    } else {
+      logToTerminal(`Failed to delete carousel: ${data.error}`, 'ERROR');
+      alert(`Delete failed: ${data.error}`);
+    }
+  } catch (err) {
+    console.error('Delete failed:', err);
+    logToTerminal(`Delete request failed: ${err.message}`, 'ERROR');
+    alert(`Delete request failed: ${err.message}`);
+  }
 }
 
 // Render the historical archive table logs
@@ -233,7 +249,7 @@ function renderHistoryTable(history) {
   });
 
   if (filtered.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="4" class="text-center">No matching records found.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="text-center">No matching records found.</td></tr>`;
     return;
   }
 
@@ -260,11 +276,25 @@ function renderHistoryTable(history) {
       </td>
       <td><span class="history-date">${dateFormatted}</span></td>
       <td>${statusBadge}</td>
+      <td class="action-cell">
+        <button class="btn-delete-row" data-id="${h.id}" title="Delete Carousel">🗑️ Delete</button>
+      </td>
     `;
     
     // Row click event opens the modal preview
-    tr.addEventListener('click', () => {
+    tr.addEventListener('click', (e) => {
+      if (e.target.closest('.btn-delete-row')) {
+        return;
+      }
       openPreviewModal(h);
+    });
+
+    const deleteBtn = tr.querySelector('.btn-delete-row');
+    deleteBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (confirm(`Are you sure you want to delete this carousel? This will permanently remove it from both the dashboard and the database.`)) {
+        await deleteCarousel(h.id);
+      }
     });
 
     tbody.appendChild(tr);
@@ -273,12 +303,17 @@ function renderHistoryTable(history) {
 
 // Trigger Pipeline Manually
 async function triggerPipeline(slot) {
-  logToTerminal(`Triggering manual pipeline execution for ${slot.toUpperCase()} slot...`, 'SYSTEM');
+  const theme = document.getElementById('select-theme').value;
+  let themePayload = theme;
+  if (theme === 'custom') {
+    themePayload = JSON.stringify(getCustomThemePayload());
+  }
+  logToTerminal(`Triggering manual pipeline execution for ${slot.toUpperCase()} slot with theme ${theme.toUpperCase()}...`, 'SYSTEM');
   try {
     const res = await fetch('/api/trigger', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slot })
+      body: JSON.stringify({ slot, theme: themePayload })
     });
     const data = await res.json();
     
@@ -451,6 +486,8 @@ async function downloadImagesAsZip(title, imagePaths) {
 // ==========================================
 
 function openPreviewModal(run) {
+  activeModalRunObj = run; // Set the active run reference for the Workspace loader button
+  
   const modal = document.getElementById('preview-modal');
   const modalTitle = document.getElementById('modal-title');
   const container = document.getElementById('modal-slides-container');
@@ -461,6 +498,7 @@ function openPreviewModal(run) {
   
   currentModalRun.title = title;
   currentModalRun.imagePaths = imagePaths;
+  currentModalRun.pdfUrl = run.angle?.pdfUrl || (run.status === 'approved' ? `/dist/approved/run-${run.id}/carousel.pdf` : `/dist/runs/${run.id}/carousel.pdf`);
   
   modalTitle.textContent = title;
   container.innerHTML = '';
@@ -527,7 +565,306 @@ function openPreviewModal(run) {
 
 function closePreviewModal() {
   currentModalRun = { title: '', imagePaths: [] };
+  activeModalRunObj = null;
   document.getElementById('preview-modal').classList.add('hidden');
+}
+
+// ==========================================================================
+// ADVANCED PREMIUM SAAS WORKSPACE FUNCTION HELPERS
+// ==========================================================================
+
+function getCustomThemePayload() {
+  const bg = document.getElementById('picker-bg').value;
+  const textPrimary = document.getElementById('picker-text-primary').value;
+  const textSecondary = document.getElementById('picker-text-secondary').value;
+  const accent = document.getElementById('picker-accent').value;
+  const brandSecondary = document.getElementById('picker-secondary').value;
+  const font = document.getElementById('select-custom-font').value;
+  return { bg, textPrimary, textSecondary, accent, brandSecondary, font };
+}
+
+function syncColorInputs(pickerId, hexId) {
+  const picker = document.getElementById(pickerId);
+  const hex = document.getElementById(hexId);
+  picker.addEventListener('input', () => {
+    hex.value = picker.value.toUpperCase();
+    updateLivePreviewColors();
+  });
+  hex.addEventListener('input', () => {
+    if (hex.value.match(/^#[0-9A-F]{6}$/i)) {
+      picker.value = hex.value;
+      updateLivePreviewColors();
+    }
+  });
+}
+
+function updateLivePreviewColors() {
+  const theme = document.getElementById('select-theme').value;
+  if (theme !== 'custom') return;
+  
+  const payload = getCustomThemePayload();
+  let fontStack = "'Inter', sans-serif";
+  if (payload.font === 'serif' || payload.font === 'Playfair Display') {
+    fontStack = "'Playfair Display', Georgia, serif";
+  } else if (payload.font === 'outfit' || payload.font === 'Outfit') {
+    fontStack = "'Outfit', sans-serif";
+  } else if (payload.font === 'bebas' || payload.font === 'Bebas Neue') {
+    fontStack = "'Bebas Neue', sans-serif";
+  }
+  
+  const slides = document.querySelectorAll('#slides-deck .slide');
+  slides.forEach(slide => {
+    // Override class for custom styles
+    slide.className = slide.className.replace(/theme-\S+/g, 'theme-custom');
+    
+    // Inject custom colors
+    slide.style.setProperty('--brand-bg', payload.bg);
+    slide.style.setProperty('--brand-text-primary', payload.textPrimary);
+    slide.style.setProperty('--brand-text-secondary', payload.textSecondary);
+    slide.style.setProperty('--brand-accent', payload.accent);
+    slide.style.setProperty('--brand-secondary', payload.brandSecondary);
+    slide.style.setProperty('font-family', fontStack, 'important');
+    
+    // Calculate brightness for theme contrast classes
+    const hex = payload.bg.replace('#', '');
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    
+    if (brightness < 128) {
+      slide.classList.add('slide-theme-dark');
+      slide.classList.remove('slide-theme-light');
+    } else {
+      slide.classList.add('slide-theme-light');
+      slide.classList.remove('slide-theme-dark');
+    }
+  });
+}
+
+function renderLivePreviewHtml(run) {
+  const deck = document.getElementById('slides-deck');
+  deck.innerHTML = '';
+  
+  const theme = run.theme || 'default';
+  let themeClass = `theme-${theme}`;
+  let customStyleAttr = '';
+  
+  if (typeof theme === 'string' && theme.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(theme);
+      themeClass = 'theme-custom';
+      let fontStack = "'Inter', sans-serif";
+      if (parsed.font === 'serif' || parsed.font === 'Playfair Display') {
+        fontStack = "'Playfair Display', Georgia, serif";
+      } else if (parsed.font === 'outfit' || parsed.font === 'Outfit') {
+        fontStack = "'Outfit', sans-serif";
+      } else if (parsed.font === 'bebas' || parsed.font === 'Bebas Neue') {
+        fontStack = "'Bebas Neue', sans-serif";
+      }
+      customStyleAttr = `style="` +
+        `--brand-bg: ${parsed.bg || '#0F0F1A'}; ` +
+        `--brand-text-primary: ${parsed.textPrimary || '#F9FAFB'}; ` +
+        `--brand-text-secondary: ${parsed.textSecondary || '#9CA3AF'}; ` +
+        `--brand-accent: ${parsed.accent || '#6366F1'}; ` +
+        `--brand-secondary: ${parsed.brandSecondary || '#EC4899'}; ` +
+        `font-family: ${fontStack} !important;"`;
+    } catch (err) {
+      console.error('Failed to parse custom theme in renderLivePreviewHtml:', err);
+    }
+  }
+  
+  const brandHandle = 'www.linkedin.com/in/mohammad-anouf-saani';
+  const authorName = 'Mohammad Anouf Saani';
+  const totalSlides = run.slides.length;
+  
+  run.slides.forEach((slide, index) => {
+    const slideNumStr = String(slide.slide_number).padStart(2, '0');
+    const progressPercent = (index / (totalSlides - 1 || 1)) * 100;
+    
+    let isDark;
+    if (theme === 'light' || theme === 'r3' || theme === 'r4') {
+      isDark = false;
+    } else if (theme === 'dark' || theme === 'ocean' || theme === 'sunset' || theme === 'forest' || theme === 'r1' || theme === 'r2') {
+      isDark = true;
+    } else if (themeClass === 'theme-custom') {
+      try {
+        const parsed = JSON.parse(theme);
+        const bg = parsed.bg || '#0F0F1A';
+        const hex = bg.replace('#', '');
+        const r = parseInt(hex.substring(0, 2), 16);
+        const g = parseInt(hex.substring(2, 4), 16);
+        const b = parseInt(hex.substring(4, 6), 16);
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+        isDark = brightness < 128;
+      } catch (e) {
+        isDark = true;
+      }
+    } else {
+      isDark = index === 0 || index === 1 || index === 4;
+    }
+    const slideThemeClass = isDark ? 'slide-theme-dark' : 'slide-theme-light';
+    
+    const isOutro = index === totalSlides - 1;
+    const accentBarClass = isOutro ? 'accent-bar-top' : 'accent-bar-bottom';
+    const contentAreaClass = isOutro ? 'slide-content-area-outro' : '';
+    const titleClass = isOutro || index === 0 ? 'slide-title-large' : 'slide-title-body';
+    
+    const footerIconText = isOutro ? '💜' : '&rarr;';
+    const footerIconClass = isOutro ? 'footer-icon-heart' : '';
+    
+    let titleText = '';
+    let bodyText = '';
+    
+    if (index === 0) {
+      titleText = slide.headline || '';
+      bodyText = slide.subheadline || '';
+    } else if (isOutro) {
+      titleText = slide.headline || 'THANK YOU!';
+      bodyText = slide.subheadline || '';
+    } else {
+      titleText = slide.title || '';
+      bodyText = slide.content || '';
+    }
+    
+    const formatMarkdownHtml = (txt) => {
+      if (!txt) return '';
+      return txt.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    };
+    titleText = formatMarkdownHtml(titleText);
+    bodyText = formatMarkdownHtml(bodyText);
+    
+    const slideWrapper = document.createElement('div');
+    slideWrapper.className = 'html-slide-wrapper';
+    slideWrapper.innerHTML = `
+      <div class="slide ${themeClass} ${slideThemeClass} slide-index-${index}" ${customStyleAttr}>
+        <div class="slide-backdrop-num">${slideNumStr}</div>
+        
+        <div class="slide-top-line-container">
+          <div class="slide-top-line-left"></div>
+          <div class="slide-top-line-number">${slideNumStr}</div>
+          <div class="slide-top-line-right"></div>
+        </div>
+        
+        <div class="slide-header">
+          <div class="brand-handle">${brandHandle}</div>
+          <div class="slide-number">${slideNumStr}</div>
+          <div class="slide-number-r1">#2026</div>
+          <div class="slide-number-r3">#${slideNumStr}</div>
+        </div>
+        
+        ${index < totalSlides - 1 ? `<div class="slide-swipe-pill">Swipe</div>` : ''}
+        
+        <div class="accent-bar ${accentBarClass}"></div>
+        <div class="slide-content-area ${contentAreaClass}">
+          ${theme === 'r4' && index === 0 ? `<div class="slide-title-pre">3 WAYS TO:</div>` : ''}
+          <h1 class="slide-title ${titleClass}">${titleText}</h1>
+          <p class="slide-paragraph">${bodyText}</p>
+        </div>
+        
+        <div class="slide-bottom-line-container">
+          <div class="slide-bottom-line"></div>
+          <div class="slide-bottom-line-arrow">&rarr;</div>
+          <div class="curved-arrow"></div>
+        </div>
+        
+        <div class="slide-progress-bar-container">
+          <div class="slide-progress-bar-fill" style="width: ${progressPercent}%;"></div>
+        </div>
+        
+        <div class="slide-footer">
+          <div class="footer-author">${authorName}</div>
+          <div class="footer-author-pill">
+            <img src="https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80" alt="Avatar">
+            <span class="name">${authorName}</span>
+          </div>
+          <div class="footer-website">linkedin.com/in/mohammad-anouf-saani</div>
+          <div class="footer-handle">@mohammadanoufsaani</div>
+          <div class="footer-swipe-text">SWIPE</div>
+          <div class="footer-icon ${footerIconClass}">${footerIconText}</div>
+        </div>
+      </div>
+    `;
+    
+    slideWrapper.addEventListener('click', () => openPreviewModal(run));
+    deck.appendChild(slideWrapper);
+  });
+}
+
+function bindLiveTextListeners() {
+  const container = document.getElementById('slide-text-fields-container');
+  
+  container.querySelectorAll('.slide-input-headline').forEach(input => {
+    input.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.dataset.idx, 10);
+      const text = e.target.value.replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>');
+      const slideEl = document.querySelector(`#slides-deck .slide-index-\${idx}`);
+      if (slideEl) {
+        const titleEl = slideEl.querySelector('.slide-title');
+        if (titleEl) titleEl.innerHTML = text;
+      }
+    });
+  });
+  
+  container.querySelectorAll('.slide-input-subheadline').forEach(input => {
+    input.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.dataset.idx, 10);
+      const text = e.target.value.replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>');
+      const slideEl = document.querySelector(`#slides-deck .slide-index-\${idx}`);
+      if (slideEl) {
+        const paraEl = slideEl.querySelector('.slide-paragraph');
+        if (paraEl) paraEl.innerHTML = text;
+      }
+    });
+  });
+  
+  container.querySelectorAll('.slide-input-title').forEach(input => {
+    input.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.dataset.idx, 10);
+      const text = e.target.value.replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>');
+      const slideEl = document.querySelector(`#slides-deck .slide-index-\${idx}`);
+      if (slideEl) {
+        const titleEl = slideEl.querySelector('.slide-title');
+        if (titleEl) titleEl.innerHTML = text;
+      }
+    });
+  });
+  
+  container.querySelectorAll('.slide-input-content').forEach(input => {
+    input.addEventListener('input', (e) => {
+      const idx = parseInt(e.target.dataset.idx, 10);
+      const text = e.target.value.replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>');
+      const slideEl = document.querySelector(`#slides-deck .slide-index-\${idx}`);
+      if (slideEl) {
+        const paraEl = slideEl.querySelector('.slide-paragraph');
+        if (paraEl) paraEl.innerHTML = text;
+      }
+    });
+  });
+}
+
+function downloadActivePdf() {
+  if (!activeRunId) {
+    alert('No active run selected.');
+    return;
+  }
+  
+  let pdfUrl = activeRunDetails.angle?.pdfUrl;
+  if (!pdfUrl) {
+    const status = activeRunDetails.status;
+    if (status === 'approved') {
+      pdfUrl = `/dist/approved/run-\${activeRunId}/carousel.pdf`;
+    } else {
+      pdfUrl = `/dist/runs/\${activeRunId}/carousel.pdf`;
+    }
+  }
+  
+  const tempLink = document.createElement('a');
+  tempLink.href = getImageUrl(pdfUrl);
+  tempLink.download = `carousel-\${activeRunId}.pdf`;
+  document.body.appendChild(tempLink);
+  tempLink.click();
+  document.body.removeChild(tempLink);
 }
 
 // ==========================================
@@ -553,7 +890,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Curation Action Listeners
   document.getElementById('btn-approve').addEventListener('click', () => submitCurationAction('approve'));
   document.getElementById('btn-download-zip-active').addEventListener('click', () => {
-    downloadImagesAsZip(activeRunDetails.title, activeRunDetails.imagePaths);
+    downloadImagesAsZip(activeRunDetails.angle?.title || 'Carousel', activeRunDetails.imagePaths);
   });
   document.getElementById('btn-regen').addEventListener('click', () => submitCurationAction('regen'));
   document.getElementById('btn-reject').addEventListener('click', () => submitCurationAction('reject'));
@@ -579,6 +916,118 @@ document.addEventListener('DOMContentLoaded', () => {
   // Search Filter Handler
   document.getElementById('search-filter').addEventListener('input', () => {
     fetchHistory(true); // Redraw table based on input
+  });
+
+  // Theme Dropdown Customizer Selector
+  document.getElementById('select-theme').addEventListener('change', (e) => {
+    const customizer = document.getElementById('brand-customizer');
+    if (e.target.value === 'custom') {
+      customizer.classList.remove('hidden');
+      updateLivePreviewColors();
+    } else {
+      customizer.classList.add('hidden');
+      // If active workspace is loaded, re-render it to remove custom colors
+      if (isCurationActive && activeRunDetails) {
+        renderLivePreviewHtml(activeRunDetails);
+      }
+    }
+  });
+
+  // Color Pickers & Hex inputs Sync
+  syncColorInputs('picker-bg', 'hex-bg');
+  syncColorInputs('picker-text-primary', 'hex-text-primary');
+  syncColorInputs('picker-text-secondary', 'hex-text-secondary');
+  syncColorInputs('picker-accent', 'hex-accent');
+  syncColorInputs('picker-secondary', 'hex-secondary');
+  document.getElementById('select-custom-font').addEventListener('change', updateLivePreviewColors);
+
+  // Reset Customizer Button
+  document.getElementById('btn-reset-customizer').addEventListener('click', () => {
+    document.getElementById('picker-bg').value = '#0F0F1A';
+    document.getElementById('hex-bg').value = '#0F0F1A';
+    document.getElementById('picker-text-primary').value = '#F9FAFB';
+    document.getElementById('hex-text-primary').value = '#F9FAFB';
+    document.getElementById('picker-text-secondary').value = '#9CA3AF';
+    document.getElementById('hex-text-secondary').value = '#9CA3AF';
+    document.getElementById('picker-accent').value = '#6366F1';
+    document.getElementById('hex-accent').value = '#6366F1';
+    document.getElementById('picker-secondary').value = '#EC4899';
+    document.getElementById('hex-secondary').value = '#EC4899';
+    document.getElementById('select-custom-font').value = 'Outfit';
+    updateLivePreviewColors();
+  });
+
+  // Custom Topic Generator Button
+  document.getElementById('btn-generate-custom').addEventListener('click', async () => {
+    const topic = document.getElementById('input-custom-topic').value.trim();
+    if (!topic) {
+      alert('Please enter a topic prompt first.');
+      return;
+    }
+    
+    const selectTheme = document.getElementById('select-theme').value;
+    let themePayload = selectTheme;
+    if (selectTheme === 'custom') {
+      themePayload = JSON.stringify(getCustomThemePayload());
+    }
+    
+    logToTerminal(`Triggering custom generation for topic: "${topic}"...`, 'SYSTEM');
+    
+    try {
+      const res = await fetch('/api/generate-custom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, theme: themePayload })
+      });
+      const data = await res.json();
+      if (data.success) {
+        logToTerminal(`Custom generation started successfully for run ID ${data.runId}.`, 'SUCCESS');
+        logToTerminal(`Generating content and rendering PNGs/PDF...`, 'WARN');
+        document.getElementById('input-custom-topic').value = '';
+        
+        // Poll for updates
+        setTimeout(() => fetchHistory(true), 25000);
+      } else {
+        logToTerminal(`Custom generation failed: ${data.error}`, 'ERROR');
+      }
+    } catch (err) {
+      logToTerminal(`Custom generation request failed: ${err.message}`, 'ERROR');
+    }
+  });
+
+  // Download PDF Active Workspace Trigger
+  document.getElementById('btn-download-pdf-active').addEventListener('click', downloadActivePdf);
+
+  // Modal Download PDF and Load in Workspace triggers
+  document.getElementById('btn-download-pdf-modal').addEventListener('click', () => {
+    if (!currentModalRun.pdfUrl) {
+      alert('No PDF available.');
+      return;
+    }
+    const tempLink = document.createElement('a');
+    tempLink.href = getImageUrl(currentModalRun.pdfUrl);
+    tempLink.download = `carousel-${currentModalRun.title.replace(/[^a-z0-9]/gi, '_')}.pdf`;
+    document.body.appendChild(tempLink);
+    tempLink.click();
+    document.body.removeChild(tempLink);
+  });
+
+  document.getElementById('btn-load-workspace-modal').addEventListener('click', () => {
+    if (activeModalRunObj) {
+      logToTerminal(`Loading run ${activeModalRunObj.id} into active Curation Workspace...`, 'SYSTEM');
+      closePreviewModal();
+      
+      // Force status to pending to enable interactive edits
+      const editableRun = {
+        ...activeModalRunObj,
+        status: 'pending'
+      };
+      
+      renderCurationWorkspace(editableRun);
+      logToTerminal(`Loaded run "${activeModalRunObj.angle?.title || activeModalRunObj.id}" in curation space.`, 'SUCCESS');
+    } else {
+      alert('Could not find selected run to load.');
+    }
   });
 
   // LinkedIn Post Caption Copy Button

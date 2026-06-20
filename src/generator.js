@@ -108,7 +108,8 @@ async function generateNvidiaContent(story, timeSlot) {
       temperature: 0.2,
       max_tokens: 1024,
       response_format: { type: 'json_object' }
-    })
+    }),
+    signal: AbortSignal.timeout(60000)
   });
 
   if (!response.ok) {

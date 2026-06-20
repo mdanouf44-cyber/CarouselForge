@@ -990,3 +990,254 @@ body {
   outline: none;
   border-color: var(--indigo-accent);
 }
+
+/* Theme Selector Dropdown styling */
+.theme-selector-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 25px;
+}
+
+.theme-selector-label {
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.theme-select {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-panel);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: var(--text-primary);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke-width='2.5' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' d='M19.5 8.25l-7.5 7.5-7.5-7.5' /%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px;
+}
+
+.theme-select:focus {
+  border-color: var(--indigo-accent);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.theme-select option {
+  background-color: #0d0d10;
+  color: var(--text-primary);
+  padding: 12px;
+}
+
+/* ==========================================================================
+   RESPONSIVENESS & MEDIA QUERIES
+   ========================================================================== */
+
+/* Tablet & Smaller Screens (max-width: 1100px) */
+@media (max-width: 1100px) {
+  .app-container {
+    padding: 20px;
+    gap: 20px;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr; /* Stack left and right sections vertically */
+    gap: 20px;
+  }
+
+  .left-column, .right-column {
+    width: 100%;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(4, 1fr); /* Expand all stats into a single row */
+  }
+}
+
+/* Mobile Screens (max-width: 768px) { */
+@media (max-width: 768px) {
+  .app-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+
+  .header-meta {
+    width: 100%;
+    justify-content: space-between;
+    gap: 15px;
+    flex-wrap: wrap;
+  }
+
+  .meta-item {
+    align-items: flex-start;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr); /* 2x2 grid */
+  }
+
+  .curation-action-buttons {
+    grid-template-columns: repeat(2, 1fr); /* 2x2 buttons layout */
+    gap: 10px;
+  }
+
+  .modal-slides-grid {
+    grid-template-columns: repeat(2, 1fr); /* 2 columns in modal slide scanner */
+  }
+
+  .modal-card {
+    padding: 20px;
+    width: 95%;
+  }
+
+  #modal-slides-text-container {
+    grid-template-columns: 1fr !important; /* Stack text preview cards vertically */
+  }
+
+  .slide-thumbnail {
+    width: 300px;
+    height: 300px; /* Resize thumbnails slightly for smaller viewports */
+  }
+}
+
+/* Small Mobile Screens (max-width: 480px) */
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: 1fr; /* Stack metrics */
+  }
+
+  .curation-action-buttons {
+    grid-template-columns: 1fr; /* Stack curation actions */
+  }
+
+  .modal-slides-grid {
+    grid-template-columns: 1fr; /* Single column slide scan */
+  }
+
+  .header-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .status-indicator {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ==========================================================================
+   Carousel Forge Premium SaaS Upgrades Additions
+   ========================================================================== */
+
+/* Active PDF Download Button styles */
+.btn-action-download-pdf {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+  color: #ef4444 !important;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.btn-action-download-pdf:hover {
+  background: #ef4444 !important;
+  color: #fff !important;
+  box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
+}
+
+.btn-action-download-pdf:active {
+  transform: scale(0.98);
+}
+
+/* Live HTML Preview Slide Simulator styles */
+.html-slide-wrapper {
+  width: 378px;
+  height: 378px;
+  overflow: hidden;
+  position: relative;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #0F0F1A;
+}
+
+.html-slide-wrapper .slide {
+  transform: scale(0.35);
+  transform-origin: top left;
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  pointer-events: none;
+  page-break-after: avoid !important;
+}
+
+/* Brand Customizer styling details */
+.brand-customizer-panel label {
+  font-weight: 500;
+  font-family: 'Inter', sans-serif;
+}
+
+.brand-customizer-panel select {
+  border-radius: 6px;
+  border: 1px solid var(--border-panel);
+  color: var(--text-primary);
+}
+
+.brand-customizer-panel select:focus {
+  border-color: var(--indigo-accent);
+  outline: none;
+}
+
+/* Delete button styling in history table */
+.action-cell {
+  text-align: right;
+  padding-right: 20px;
+}
+
+.btn-delete-row {
+  background: var(--danger-glow);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: var(--danger);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-delete-row:hover {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.45);
+  transform: translateY(-1px);
+}
+
+.btn-delete-row:active {
+  transform: translateY(0);
+}
+
+
+

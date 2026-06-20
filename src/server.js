@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 import { scrapeTrending, getIstBoundaries } from './scraper.js';
 import { generateCarouselContent } from './generator.js';
 import { renderCarouselPngs } from './renderer.js';
-import { readDb, writeDb, addHistoryEntry, updateHistoryStatus, initDb, cleanupOldHistoryEntries } from './db.js';
+import { readDb, writeDb, addHistoryEntry, updateHistoryStatus, initDb, cleanupOldHistoryEntries, deleteHistoryEntry } from './db.js';
 
 dotenv.config();
 
@@ -129,9 +129,15 @@ export async function approveRun(runId, updatedSlides = null, updatedLinkedinPos
     const renderResult = await renderCarouselPngs({
       date: entry.angle?.publishedAt ? new Date(entry.angle.publishedAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
       linkedin_post: entry.linkedin_post,
-      slides: entry.slides
+      slides: entry.slides,
+      theme: entry.theme || 'default'
     });
     entry.imagePaths = renderResult.imagePaths;
+    if (entry.angle) {
+      entry.angle.pdfPath = renderResult.pdfPath;
+    } else {
+      entry.angle = { pdfPath: renderResult.pdfPath };
+    }
   }
 
   const approvedDir = path.join(__dirname, `../dist/approved/run-${runId}`);
@@ -146,11 +152,24 @@ export async function approveRun(runId, updatedSlides = null, updatedLinkedinPos
     newPaths.push(newPath);
   }
 
+  // Copy PDF if exists
+  let approvedPdfPath = '';
+  const oldPdfPath = entry.angle?.pdfPath || path.join(__dirname, `../dist/runs/${runId}/carousel.pdf`);
+  if (fs.existsSync(oldPdfPath)) {
+    const pdfBaseName = path.basename(oldPdfPath);
+    approvedPdfPath = path.join(approvedDir, pdfBaseName);
+    fs.copyFileSync(oldPdfPath, approvedPdfPath);
+  }
+
   // Update history entry status & fields in Supabase
   await updateHistoryStatus(runId, 'approved', { 
     imagePaths: newPaths,
     linkedin_post: entry.linkedin_post,
-    slides: entry.slides
+    slides: entry.slides,
+    angle: entry.angle ? {
+      ...entry.angle,
+      pdfPath: approvedPdfPath || entry.angle.pdfPath
+    } : { pdfPath: approvedPdfPath }
   });
   
   return { status: 'approved', approvedDir };
@@ -209,6 +228,7 @@ export async function regenerateRun(runId) {
 
   // Generate copy using fallback helper
   const slidesData = await getSlidesContent(story, currentRun.timeSlot);
+  slidesData.theme = currentRun.theme || 'default';
 
   // Render to PNGs
   const renderResult = await renderCarouselPngs(slidesData);
@@ -236,10 +256,14 @@ export async function regenerateRun(runId) {
     id: runId,
     timeSlot: currentRun.timeSlot,
     status: 'pending',
-    angle: story,
+    angle: {
+      ...story,
+      pdfPath: renderResult.pdfPath
+    },
     slides: slidesData.slides,
     imagePaths: renderResult.imagePaths,
-    linkedin_post: slidesData.linkedin_post
+    linkedin_post: slidesData.linkedin_post,
+    theme: currentRun.theme || 'default'
   });
 
   // Sync back to Telegram if chatbot is enabled and running
@@ -405,7 +429,7 @@ if (bot) {
 }
 
 // Unified pipeline trigger
-async function executePipeline(timeSlot, chatId) {
+async function executePipeline(timeSlot, chatId, theme = 'default') {
   try {
     const isManualWeb = chatId === 'manual-trigger';
     if (!isManualWeb && bot) {
@@ -429,7 +453,8 @@ async function executePipeline(timeSlot, chatId) {
       timeSlot,
       angles: stories,
       currentAngleIndex: 0,
-      chatId
+      chatId,
+      theme
     };
     await writeDb(db);
 
@@ -438,6 +463,7 @@ async function executePipeline(timeSlot, chatId) {
       await bot.sendMessage(chatId, `✍ *Angle #1 Selected*:\n"${stories[0].title}"\nGenerating copy via Gemini/Nvidia...`, { parse_mode: 'Markdown' });
     }
     const slidesData = await getSlidesContent(stories[0], timeSlot);
+    slidesData.theme = theme;
 
     // 4. Render to PNGs
     if (!isManualWeb && bot) {
@@ -450,10 +476,14 @@ async function executePipeline(timeSlot, chatId) {
       id: runId,
       timeSlot,
       status: 'pending',
-      angle: stories[0],
+      angle: {
+        ...stories[0],
+        pdfPath: renderResult.pdfPath
+      },
       slides: slidesData.slides,
       imagePaths: renderResult.imagePaths,
-      linkedin_post: slidesData.linkedin_post
+      linkedin_post: slidesData.linkedin_post,
+      theme
     });
 
     // 5. Send images to Telegram
@@ -551,6 +581,10 @@ app.use('/dist', express.static(distDir));
 const publicDir = path.join(__dirname, '../public');
 app.use(express.static(publicDir));
 
+// Serve templates static assets from templates/ directory (for live preview slide.css)
+const templatesDir = path.join(__dirname, '../templates');
+app.use('/templates', express.static(templatesDir));
+
 // API: System Status
 app.get('/api/status', async (req, res) => {
   const db = await readDb();
@@ -600,16 +634,84 @@ app.get('/api/history', async (req, res) => {
 
 // API: Trigger Pipeline Manually
 app.post('/api/trigger', (req, res) => {
-  const { slot } = req.body;
+  const { slot, theme } = req.body;
   const targetSlot = slot === 'pm' ? 'pm' : 'am';
+  const targetTheme = theme || 'default';
 
   // Trigger pipeline asynchronously (manual-trigger flag bypasses TG messages)
-  executePipeline(targetSlot, 'manual-trigger').catch(console.error);
+  executePipeline(targetSlot, 'manual-trigger', targetTheme).catch(console.error);
 
   res.json({
     success: true,
-    message: `Pipeline successfully triggered for ${targetSlot.toUpperCase()} slot.`
+    message: `Pipeline successfully triggered for ${targetSlot.toUpperCase()} slot with theme ${targetTheme}.`
   });
+});
+
+// API: Generate Custom Topic
+app.post('/api/generate-custom', async (req, res) => {
+  const { topic, theme } = req.body;
+  if (!topic) {
+    return res.status(400).json({ error: 'Topic prompt is required.' });
+  }
+
+  const targetTheme = theme || 'default';
+  const runId = `run-custom-${Date.now()}`;
+  
+  // Respond immediately that generation started
+  res.json({
+    success: true,
+    runId,
+    message: `Started custom generation for topic: "${topic}".`
+  });
+
+  // Run generation asynchronously
+  (async () => {
+    try {
+      console.log(`[Custom Generate] Starting generation for topic: "${topic}" with theme: ${targetTheme}`);
+      
+      const story = {
+        title: topic,
+        url: 'https://carousel-forge.custom',
+        summary: `Generate a LinkedIn carousel about: ${topic}. Explain the key concepts, mechanics, and why it matters.`,
+        source: 'Custom Input',
+        publishedAt: new Date().toISOString()
+      };
+
+      const db = await readDb();
+      db.current_run = {
+        runId,
+        timeSlot: 'custom',
+        angles: [story],
+        currentAngleIndex: 0,
+        chatId: 'manual-trigger',
+        theme: targetTheme
+      };
+      await writeDb(db);
+
+      const slidesData = await getSlidesContent(story, 'pm');
+      slidesData.theme = targetTheme;
+
+      const renderResult = await renderCarouselPngs(slidesData);
+
+      await addHistoryEntry({
+        id: runId,
+        timeSlot: 'custom',
+        status: 'pending',
+        angle: {
+          ...story,
+          pdfPath: renderResult.pdfPath
+        },
+        slides: slidesData.slides,
+        imagePaths: renderResult.imagePaths,
+        linkedin_post: slidesData.linkedin_post,
+        theme: targetTheme
+      });
+      
+      console.log(`[Custom Generate] Successfully generated and stored custom carousel for runId: ${runId}`);
+    } catch (err) {
+      console.error(`[Custom Generate] Failed to generate custom carousel:`, err.message);
+    }
+  })();
 });
 
 // API: Curation Action Panel (Approve/Reject/Regenerate)
@@ -635,6 +737,22 @@ app.post('/api/action', async (req, res) => {
     res.json({ success: true, result });
   } catch (err) {
     console.error(`API action error [${action}]:`, err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// API: Delete Carousel Run
+app.delete('/api/carousel/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const success = await deleteHistoryEntry(id);
+    if (success) {
+      res.json({ success: true, message: `Successfully deleted carousel ${id}` });
+    } else {
+      res.status(500).json({ error: `Failed to delete carousel ${id}` });
+    }
+  } catch (err) {
+    console.error(`API delete error [${id}]:`, err.message);
     res.status(500).json({ error: err.message });
   }
 });
