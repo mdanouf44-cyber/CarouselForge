@@ -602,6 +602,18 @@ body {
   padding-top: 25px;
 }
 
+.btn-action-approve {
+  grid-column: span 2;
+}
+
+.btn-action-download {
+  grid-column: span 2;
+}
+
+.btn-action-download-pdf {
+  grid-column: span 2;
+}
+
 .btn-action-download {
   background: rgba(167, 139, 250, 0.15);
   border: 1px solid rgba(167, 139, 250, 0.3);
@@ -1039,104 +1051,6 @@ body {
 }
 
 /* ==========================================================================
-   RESPONSIVENESS & MEDIA QUERIES
-   ========================================================================== */
-
-/* Tablet & Smaller Screens (max-width: 1100px) */
-@media (max-width: 1100px) {
-  .app-container {
-    padding: 20px;
-    gap: 20px;
-  }
-
-  .dashboard-grid {
-    grid-template-columns: 1fr; /* Stack left and right sections vertically */
-    gap: 20px;
-  }
-
-  .left-column, .right-column {
-    width: 100%;
-  }
-
-  .stats-grid {
-    grid-template-columns: repeat(4, 1fr); /* Expand all stats into a single row */
-  }
-}
-
-/* Mobile Screens (max-width: 768px) { */
-@media (max-width: 768px) {
-  .app-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 15px;
-  }
-
-  .header-meta {
-    width: 100%;
-    justify-content: space-between;
-    gap: 15px;
-    flex-wrap: wrap;
-  }
-
-  .meta-item {
-    align-items: flex-start;
-  }
-
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr); /* 2x2 grid */
-  }
-
-  .curation-action-buttons {
-    grid-template-columns: repeat(2, 1fr); /* 2x2 buttons layout */
-    gap: 10px;
-  }
-
-  .modal-slides-grid {
-    grid-template-columns: repeat(2, 1fr); /* 2 columns in modal slide scanner */
-  }
-
-  .modal-card {
-    padding: 20px;
-    width: 95%;
-  }
-
-  #modal-slides-text-container {
-    grid-template-columns: 1fr !important; /* Stack text preview cards vertically */
-  }
-
-  .slide-thumbnail {
-    width: 300px;
-    height: 300px; /* Resize thumbnails slightly for smaller viewports */
-  }
-}
-
-/* Small Mobile Screens (max-width: 480px) */
-@media (max-width: 480px) {
-  .stats-grid {
-    grid-template-columns: 1fr; /* Stack metrics */
-  }
-
-  .curation-action-buttons {
-    grid-template-columns: 1fr; /* Stack curation actions */
-  }
-
-  .modal-slides-grid {
-    grid-template-columns: 1fr; /* Single column slide scan */
-  }
-
-  .header-meta {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-
-  .status-indicator {
-    width: 100%;
-    justify-content: center;
-  }
-}
-
-/* ==========================================================================
    Carousel Forge Premium SaaS Upgrades Additions
    ========================================================================== */
 
@@ -1240,4 +1154,258 @@ body {
 }
 
 
+/* ==========================================================================
+   RESPONSIVENESS & MEDIA QUERIES
+   ========================================================================== */
 
+/* Tablet & Smaller Screens (max-width: 1024px) */
+@media (max-width: 1024px) {
+  .app-container {
+    padding: 20px;
+    gap: 20px;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr; /* Stack left and right sections vertically */
+    gap: 25px;
+  }
+
+  .left-column, .right-column {
+    width: 100%;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(4, 1fr); /* Expand all stats into a single row on wide stacked layouts */
+    gap: 15px;
+  }
+}
+
+/* Mobile Screens (max-width: 768px) */
+@media (max-width: 768px) {
+  .app-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 15px;
+  }
+
+  .header-meta {
+    width: 100%;
+    justify-content: space-between;
+    gap: 15px;
+    flex-wrap: wrap;
+  }
+
+  .meta-item {
+    align-items: flex-start;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr); /* 2x2 grid */
+    gap: 12px;
+  }
+
+  /* Compact responsive styling for dynamic HTML and PNG slides */
+  .slide-thumbnail,
+  .html-slide-wrapper {
+    width: 280px !important;
+    height: 280px !important;
+  }
+
+  .html-slide-wrapper .slide {
+    transform: scale(0.26) !important; /* Perfect scale mapping for 1080px to 280px preview container */
+  }
+
+  /* Dynamic 2x2 button grid with Approve spanning full width at the top */
+  .curation-action-buttons {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+    padding-top: 20px;
+  }
+
+  .btn-action-approve {
+    grid-column: span 2 !important;
+  }
+
+  .btn-action-download,
+  .btn-action-download-pdf,
+  .btn-action-regen,
+  .btn-action-reject {
+    grid-column: span 1 !important;
+  }
+
+  /* History Table Card Layout Transformation */
+  .history-table, 
+  .history-table thead, 
+  .history-table tbody, 
+  .history-table th, 
+  .history-table td, 
+  .history-table tr {
+    display: block !important;
+  }
+
+  .history-table thead {
+    display: none !important; /* Hide native table headers */
+  }
+
+  .history-table tbody tr {
+    margin-bottom: 15px;
+    border: 1px solid var(--border-panel);
+    border-radius: 12px;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.01);
+  }
+
+  .history-table td {
+    border: none;
+    padding: 8px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    text-align: right;
+  }
+
+  .history-table td:last-child {
+    border-bottom: none;
+    padding-top: 12px;
+  }
+
+  /* Injected attribute descriptors for table layout */
+  .history-table td::before {
+    content: attr(data-label);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .history-topic-title {
+    max-width: 200px !important;
+    text-align: right;
+  }
+
+  .action-cell {
+    width: 100%;
+    justify-content: flex-end !important;
+    padding-right: 0 !important;
+  }
+
+  /* Premium Responsive Modal scaling upgrades */
+  .modal-backdrop {
+    overflow-y: auto !important;
+    padding: 20px 10px !important;
+    align-items: flex-start !important; /* Allow scroll from top on mobile */
+  }
+
+  .modal-card {
+    padding: 20px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 16px !important;
+    margin: auto 0;
+  }
+
+  .modal-slides-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+    max-height: none !important; /* Prevent double scroll scrollbars */
+  }
+
+  #modal-slides-text-container {
+    grid-template-columns: 1fr !important;
+  }
+
+  .modal-footer {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+    padding-top: 15px;
+  }
+
+  .modal-footer span {
+    margin-right: 0 !important;
+    text-align: center;
+    font-size: 11px;
+  }
+
+  .modal-footer button, 
+  .modal-footer .btn {
+    width: 100% !important;
+    justify-content: center !important;
+    margin: 0 !important;
+  }
+}
+
+/* Small Mobile Screens (max-width: 480px) */
+@media (max-width: 480px) {
+  .app-header {
+    align-items: center;
+    text-align: center;
+  }
+
+  .logo-area {
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .header-meta {
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .meta-item {
+    align-items: center;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr !important; /* Stack stats metrics vertically */
+    gap: 10px;
+  }
+
+  .slide-thumbnail,
+  .html-slide-wrapper {
+    width: 240px !important;
+    height: 240px !important;
+  }
+
+  .html-slide-wrapper .slide {
+    transform: scale(0.222) !important; /* Fits a 240px frame perfectly */
+  }
+
+  /* Linear action buttons on small mobile */
+  .curation-action-buttons {
+    grid-template-columns: 1fr !important;
+  }
+
+  .btn-action-approve,
+  .btn-action-download,
+  .btn-action-download-pdf,
+  .btn-action-regen,
+  .btn-action-reject {
+    grid-column: span 1 !important;
+  }
+
+  .modal-slides-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .status-indicator {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .customizer-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Desktop (min-width: 1025px) – ensure consistent spacing */
+@media (min-width: 1025px) {
+  .app-container {
+    max-width: 1600px;
+    padding: 40px;
+  }
+}

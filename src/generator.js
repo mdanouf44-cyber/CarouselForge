@@ -42,7 +42,7 @@ Create content for exactly 5 slides and the accompanying LinkedIn post. The cont
 
 {
   "date": "YYYY-MM-DD", // Date of the news story or current date
-  "linkedin_post": "An engaging, high-converting LinkedIn post caption (150-250 words) written in a professional branding voice. Follow these guidelines for the ${timeSlot.toUpperCase()} slot:\\n${slotDescription}\\n\\nStructure the post with:\\n- A scroll-stopping hook (1 sentence)\\n- Core context summary (1-2 sentences)\\n- 3 bulleted key takeaways (clearly separated)\\n- 1 community question to drive comments\\n- 3-5 relevant tech hashtags (e.g. #AI #TechNews)",
+  "linkedin_post": "An engaging, high-converting LinkedIn post caption (150-250 words) written in a professional branding voice. Follow these guidelines for the ${timeSlot.toUpperCase()} slot:\\n${slotDescription}\\n\\nStructure the post EXACTLY with:\\n- A scroll-stopping hook starting with an eye-catching emoji (e.g. 🚨 BREAKING: or 🚀 NEWS: or similar relevant emoji)\\n- A context paragraph summarizing the news (2-3 sentences)\\n- A bulleted takeaway header (e.g. Here's what matters: or Here is what you need to know:)\\n- Exactly 3 bulleted key takeaways, starting with •\\n- A concluding paragraph highlighting the industry impact or significance of this development\\n- A community question (e.g. Question for the community: ... or What are your thoughts on ...)\\n- Exactly 5 relevant tech hashtags (e.g. #AI #TechNews #OpenAI)",
   "slides": [
     {
       "slide_number": 1,
@@ -82,7 +82,9 @@ Instructions:
 2. Keep slide text short and concise so it does not overflow when rendered on a square slide (1080x1080px).
 3. The content must be factual and directly draw from the provided news story.
 4. Each slide's text MUST NOT exceed 250 characters.
-5. Provide raw JSON only.
+5. In the "linkedin_post" value, you MUST use double newlines (\\n\\n) to separate each logical paragraph/section and each bullet point. Do not bundle them into a single block or omit spaces. Use a clean, spaced-out layout matching this style:
+   🚨 EMOJI HOOK...\\n\\nContext paragraph...\\n\\nHere's what matters:\\n\\n• Takeaway 1\\n\\n• Takeaway 2\\n\\n• Takeaway 3\\n\\nConcluding impact paragraph...\\n\\nCommunity question...\\n\\n#Hashtags
+6. Provide raw JSON only.
 `;
 }
 
@@ -109,7 +111,7 @@ async function generateNvidiaContent(story, timeSlot) {
       max_tokens: 1024,
       response_format: { type: 'json_object' }
     }),
-    signal: AbortSignal.timeout(60000)
+    signal: AbortSignal.timeout(120000)
   });
 
   if (!response.ok) {

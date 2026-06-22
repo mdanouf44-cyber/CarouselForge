@@ -270,13 +270,13 @@ function renderHistoryTable(history) {
         : `<span class="badge-status badge-status-pending">PENDING</span>`);
 
     tr.innerHTML = `
-      <td><span class="slot-indicator">${h.timeSlot.toUpperCase()}</span></td>
-      <td>
+      <td data-label="Slot"><span class="slot-indicator">${h.timeSlot.toUpperCase()}</span></td>
+      <td data-label="Topic">
         <div class="history-topic-title" title="${h.angle.title}">${h.angle.title}</div>
       </td>
-      <td><span class="history-date">${dateFormatted}</span></td>
-      <td>${statusBadge}</td>
-      <td class="action-cell">
+      <td data-label="Created"><span class="history-date">${dateFormatted}</span></td>
+      <td data-label="Status">${statusBadge}</td>
+      <td data-label="Actions" class="action-cell">
         <button class="btn-delete-row" data-id="${h.id}" title="Delete Carousel">🗑️ Delete</button>
       </td>
     `;
