@@ -181,19 +181,50 @@ export async function approveRun(runId, updatedSlides = null, updatedLinkedinPos
   const approvedDir = path.join(__dirname, `../dist/approved/run-${runId}`);
   fs.mkdirSync(approvedDir, { recursive: true });
 
-  // Copy PNGs to output approved directory
+  // Copy PNGs to output approved directory (downloading if they are remote URLs)
   const newPaths = [];
   for (const oldPath of entry.imagePaths) {
-    const baseName = path.basename(oldPath);
+    const baseName = path.basename(oldPath.startsWith('http') ? new URL(oldPath).pathname : oldPath);
     const newPath = path.join(approvedDir, baseName);
-    fs.copyFileSync(oldPath, newPath);
+    if (oldPath.startsWith('http://') || oldPath.startsWith('https://')) {
+      const response = await fetch(oldPath);
+      if (!response.ok) {
+        throw new Error(`Failed to download slide image from ${oldPath}: Status ${response.status}`);
+      }
+      const arrayBuffer = await response.arrayBuffer();
+      fs.writeFileSync(newPath, Buffer.from(arrayBuffer));
+    } else {
+      fs.copyFileSync(oldPath, newPath);
+    }
     newPaths.push(newPath);
   }
 
-  // Copy PDF if exists
+  // Copy PDF if exists (downloading if it is a remote URL)
   let approvedPdfPath = '';
+  const pdfUrl = entry.angle?.pdfUrl;
   const oldPdfPath = entry.angle?.pdfPath || path.join(__dirname, `../dist/runs/${runId}/carousel.pdf`);
-  if (fs.existsSync(oldPdfPath)) {
+
+  if (pdfUrl && (pdfUrl.startsWith('http://') || pdfUrl.startsWith('https://'))) {
+    try {
+      const pdfBaseName = path.basename(new URL(pdfUrl).pathname);
+      approvedPdfPath = path.join(approvedDir, pdfBaseName);
+      console.log(`[Approve] Downloading PDF from storage to local approved dir...`);
+      const response = await fetch(pdfUrl);
+      if (response.ok) {
+        const arrayBuffer = await response.arrayBuffer();
+        fs.writeFileSync(approvedPdfPath, Buffer.from(arrayBuffer));
+      } else {
+        console.warn(`[Approve] Failed to download PDF from URL: ${pdfUrl}`);
+        approvedPdfPath = '';
+      }
+    } catch (pdfErr) {
+      console.warn(`[Approve] Error downloading PDF:`, pdfErr.message);
+      approvedPdfPath = '';
+    }
+  }
+
+  // If download failed or wasn't a URL, try copying local path
+  if (!approvedPdfPath && fs.existsSync(oldPdfPath)) {
     const pdfBaseName = path.basename(oldPdfPath);
     approvedPdfPath = path.join(approvedDir, pdfBaseName);
     fs.copyFileSync(oldPdfPath, approvedPdfPath);
