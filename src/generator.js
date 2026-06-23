@@ -3,8 +3,8 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-if (!process.env.GEMINI_API_KEY && !process.env.NVIDIA_API_KEY) {
-  console.warn('Warning: Neither GEMINI_API_KEY nor NVIDIA_API_KEY is defined in the environment variables.');
+if (!process.env.GEMINI_API_KEY && !process.env.NVIDIA_API_KEY && !process.env.HF_API_KEY) {
+  console.warn('Warning: None of GEMINI_API_KEY, NVIDIA_API_KEY, or HF_API_KEY are defined in the environment variables.');
 }
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
@@ -147,9 +147,55 @@ async function generateGeminiContent(story, timeSlot) {
   return JSON.parse(cleanedText);
 }
 
+// Fetch completions from Hugging Face Router API (OpenAI compatible endpoint)
+async function generateHuggingFaceContent(story, timeSlot) {
+  const apiKey = process.env.HF_API_KEY;
+  const model = process.env.HF_MODEL || 'zai-org/GLM-5.2';
+  
+  console.log(`Generating AI carousel content via Hugging Face API (Model: ${model}) for story: "${story.title}"`);
+  const prompt = buildSystemPrompt(story, timeSlot);
+
+  const response = await fetch('https://router.huggingface.co/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: model,
+      messages: [
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.2,
+      max_tokens: 2048,
+      response_format: { type: 'json_object' }
+    }),
+    signal: AbortSignal.timeout(180000) // Hugging Face MoE might take longer, 3 minutes timeout
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Hugging Face API error: Status ${response.status} ${response.statusText} - ${errorText}`);
+  }
+
+  const result = await response.json();
+  const text = result.choices[0].message.content;
+  const cleanedText = cleanJsonString(text);
+  return JSON.parse(cleanedText);
+}
+
 // Main generation wrapper with fallback controls
 export async function generateCarouselContent(story, timeSlot) {
-  // If NVIDIA is configured, try it first
+  // If Hugging Face is configured, try it first
+  if (process.env.HF_API_KEY) {
+    try {
+      return await generateHuggingFaceContent(story, timeSlot);
+    } catch (error) {
+      console.warn('Hugging Face API generation failed. Falling back to NVIDIA...', error.message);
+    }
+  }
+
+  // If NVIDIA is configured, try it
   if (process.env.NVIDIA_API_KEY) {
     try {
       return await generateNvidiaContent(story, timeSlot);
