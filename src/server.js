@@ -63,6 +63,15 @@ if (token) {
 // Initialize database client connection
 initDb().catch(console.error);
 
+// Helper to escape HTML characters for safe Telegram delivery
+function escapeHtml(str) {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 // Helper to provide mockup slide data if API key is missing
 async function getSlidesContent(story, timeSlot) {
   if (!process.env.GEMINI_API_KEY && !process.env.NVIDIA_API_KEY) {
@@ -301,14 +310,13 @@ export async function regenerateRun(runId) {
       const media = renderResult.imagePaths.map((filePath, index) => ({
         type: 'photo',
         media: fs.createReadStream(filePath),
-        caption: index === 0 ? `🔄 *Regenerated Slide (Angle #${nextIndex + 1})*\n\n🎯 *Hook Headline*: ${slidesData.slides[0].headline}\n\n📖 *Story*: ${story.title}\n🔗 *Source*: ${story.url}` : undefined,
-        parse_mode: index === 0 ? 'Markdown' : undefined
+        caption: index === 0 ? `🎯 <b>Hook Headline</b>: ${escapeHtml(slidesData.slides[0].headline)}\n\n📖 <b>Story</b>: ${escapeHtml(story.title)}\n🔗 <b>Source</b>: ${escapeHtml(story.url)}` : undefined,
+        parse_mode: index === 0 ? 'HTML' : undefined
       }));
       await bot.sendMediaGroup(currentRun.chatId, media);
 
       // Send the LinkedIn post text copy block
-      const escapedPost = slidesData.linkedin_post.replace(/`/g, '\\`');
-      await bot.sendMessage(currentRun.chatId, `🔄 *New LinkedIn Post Caption (Angle #${nextIndex + 1})*:\n\n\`\`\`\n${escapedPost}\n\`\`\``, { parse_mode: 'Markdown' });
+      await bot.sendMessage(currentRun.chatId, `🔄 <b>New LinkedIn Post Caption (Angle #${nextIndex + 1})</b>:\n\n<pre>${escapeHtml(slidesData.linkedin_post)}</pre>`, { parse_mode: 'HTML' });
 
       const opts = {
         reply_markup: {
@@ -431,7 +439,7 @@ export async function executeCustomGeneration(topic, theme, chatId) {
   
   const isManualWeb = chatId === 'manual-trigger';
   if (!isManualWeb && bot) {
-    await bot.sendMessage(chatId, `🤖 *Starting Custom Topic Generation*:\n• *Topic*: "${topic}"\n• *Theme*: ${targetTheme.toUpperCase()}\n\nGenerating copy and rendering slides...`, { parse_mode: 'Markdown' });
+    await bot.sendMessage(chatId, `🤖 <b>Starting Custom Topic Generation</b>:\n• <b>Topic</b>: "${escapeHtml(topic)}"\n• <b>Theme</b>: ${escapeHtml(targetTheme.toUpperCase())}\n\nGenerating copy and rendering slides...`, { parse_mode: 'HTML' });
   }
 
   try {
@@ -478,15 +486,14 @@ export async function executeCustomGeneration(topic, theme, chatId) {
       const media = renderResult.imagePaths.map((filePath, index) => ({
         type: 'photo',
         media: fs.createReadStream(filePath),
-        caption: index === 0 ? `🎯 *Hook Headline*: ${slidesData.slides[0].headline}\n\n💡 *Topic*: ${topic}` : undefined,
-        parse_mode: index === 0 ? 'Markdown' : undefined
+        caption: index === 0 ? `🎯 <b>Hook Headline</b>: ${escapeHtml(slidesData.slides[0].headline)}\n\n💡 <b>Topic</b>: ${escapeHtml(topic)}` : undefined,
+        parse_mode: index === 0 ? 'HTML' : undefined
       }));
 
       await bot.sendMediaGroup(chatId, media);
 
       // Send the LinkedIn post text copy block
-      const escapedPost = slidesData.linkedin_post.replace(/`/g, '\\`');
-      await bot.sendMessage(chatId, `📝 *Copy-pasteable LinkedIn Post Caption*:\n\n\`\`\`\n${escapedPost}\n\`\`\``, { parse_mode: 'Markdown' });
+      await bot.sendMessage(chatId, `📝 <b>Copy-pasteable LinkedIn Post Caption</b>:\n\n<pre>${escapeHtml(slidesData.linkedin_post)}</pre>`, { parse_mode: 'HTML' });
 
       // Send inline action keyboard
       const opts = {
@@ -578,20 +585,19 @@ async function showCurationWorkspace(chatId) {
   const activePending = db.history.find(h => h.status === 'pending');
   
   if (!activePending) {
-    await bot.sendMessage(chatId, '📂 *Curation Space is Empty*\nNo pending carousels to review. Use /generate or /topic to create one.', { parse_mode: 'Markdown' });
+    await bot.sendMessage(chatId, '📂 <b>Curation Space is Empty</b>\nNo pending carousels to review. Use /generate or /topic to create one.', { parse_mode: 'HTML' });
     return;
   }
 
   const runId = activePending.id;
-  const escapedPost = (activePending.linkedin_post || '').replace(/`/g, '\\`');
   
   if (activePending.imagePaths && activePending.imagePaths.length > 0) {
     try {
       const media = activePending.imagePaths.map((filePath, index) => ({
         type: 'photo',
         media: filePath.startsWith('http') ? filePath : fs.createReadStream(filePath),
-        caption: index === 0 ? `🎯 *Hook Headline*: ${activePending.slides[0]?.headline || 'Carousel'}\n\n📖 *Story*: ${activePending.angle?.title || ''}` : undefined,
-        parse_mode: index === 0 ? 'Markdown' : undefined
+        caption: index === 0 ? `🎯 <b>Hook Headline</b>: ${escapeHtml(activePending.slides[0]?.headline || 'Carousel')}\n\n📖 <b>Story</b>: ${escapeHtml(activePending.angle?.title || '')}` : undefined,
+        parse_mode: index === 0 ? 'HTML' : undefined
       }));
       await bot.sendMediaGroup(chatId, media);
     } catch (err) {
@@ -599,7 +605,7 @@ async function showCurationWorkspace(chatId) {
     }
   }
 
-  await bot.sendMessage(chatId, `📝 *LinkedIn Post Caption*:\n\n\`\`\`\n${escapedPost}\n\`\`\``, { parse_mode: 'Markdown' });
+  await bot.sendMessage(chatId, `📝 <b>LinkedIn Post Caption</b>:\n\n<pre>${escapeHtml(activePending.linkedin_post)}</pre>`, { parse_mode: 'HTML' });
 
   const opts = {
     reply_markup: {
@@ -616,8 +622,8 @@ async function showCurationWorkspace(chatId) {
       ]
     }
   };
-  await bot.sendMessage(chatId, `Curation Workspace options for active run: *${runId}*`, {
-    parse_mode: 'Markdown',
+  await bot.sendMessage(chatId, `Curation Workspace options for active run: <b>${escapeHtml(runId)}</b>`, {
+    parse_mode: 'HTML',
     reply_markup: opts.reply_markup
   });
 }
@@ -843,8 +849,8 @@ if (bot) {
         const media = renderResult.imagePaths.map((filePath, index) => ({
           type: 'photo',
           media: fs.createReadStream(filePath),
-          caption: index === 0 ? `📝 *Updated Slide Preview* (Slide ${slideNum} modified)` : undefined,
-          parse_mode: index === 0 ? 'Markdown' : undefined
+          caption: index === 0 ? `📝 <b>Updated Slide Preview</b> (Slide ${slideNum} modified)` : undefined,
+          parse_mode: index === 0 ? 'HTML' : undefined
         }));
         await bot.sendMediaGroup(chatId, media);
       }
@@ -867,10 +873,10 @@ if (bot) {
         await approveRun(runId);
 
         await bot.answerCallbackQuery(callbackQuery.id, { text: 'Carousel approved!' });
-        await bot.editMessageText(`Carousel (${runId}) Approved ✅\n\n📁 Saved to output: \`dist/approved/run-${runId}\``, {
+        await bot.editMessageText(`Carousel (${escapeHtml(runId)}) Approved ✅\n\n📁 Saved to output: <code>dist/approved/run-${escapeHtml(runId)}</code>`, {
           chat_id: chatId,
           message_id: message.message_id,
-          parse_mode: 'Markdown'
+          parse_mode: 'HTML'
         });
         
         // Finalize by sending assets
@@ -912,10 +918,10 @@ if (bot) {
         writeSettings(settings);
         
         await bot.answerCallbackQuery(callbackQuery.id, { text: `Default theme set to ${theme}!` });
-        await bot.editMessageText(`✅ Default visual theme updated to *${theme.toUpperCase()}* for future generations.`, {
+        await bot.editMessageText(`✅ Default visual theme updated to <b>${escapeHtml(theme.toUpperCase())}</b> for future generations.`, {
           chat_id: chatId,
           message_id: message.message_id,
-          parse_mode: 'Markdown'
+          parse_mode: 'HTML'
         });
 
       // 4. Interactive menu buttons router
@@ -957,7 +963,7 @@ async function executePipeline(timeSlot, chatId, theme = 'default') {
   try {
     const isManualWeb = chatId === 'manual-trigger';
     if (!isManualWeb && bot) {
-      await bot.sendMessage(chatId, `🤖 *Starting Carousel Pipeline* for slot: *${timeSlot.toUpperCase()}*...`, { parse_mode: 'Markdown' });
+      await bot.sendMessage(chatId, `🤖 <b>Starting Carousel Pipeline</b> for slot: <b>${escapeHtml(timeSlot.toUpperCase())}</b>...`, { parse_mode: 'HTML' });
     }
 
     // 1. Scrape & Rank
@@ -984,7 +990,7 @@ async function executePipeline(timeSlot, chatId, theme = 'default') {
 
     // 3. Generate copy for Slide 1 (Angle #1) using fallback helper
     if (!isManualWeb && bot) {
-      await bot.sendMessage(chatId, `✍ *Angle #1 Selected*:\n"${stories[0].title}"\nGenerating copy via Gemini/Nvidia...`, { parse_mode: 'Markdown' });
+      await bot.sendMessage(chatId, `✍ <b>Angle #1 Selected</b>:\n"${escapeHtml(stories[0].title)}"\nGenerating copy via Gemini/Nvidia...`, { parse_mode: 'HTML' });
     }
     const slidesData = await getSlidesContent(stories[0], timeSlot);
     slidesData.theme = theme;
@@ -1016,15 +1022,14 @@ async function executePipeline(timeSlot, chatId, theme = 'default') {
       const media = renderResult.imagePaths.map((filePath, index) => ({
         type: 'photo',
         media: fs.createReadStream(filePath),
-        caption: index === 0 ? `🎯 *Hook Headline*: ${slidesData.slides[0].headline}\n\n📖 *Story Title*: ${stories[0].title}\n🔗 *Source*: ${stories[0].url}` : undefined,
-        parse_mode: index === 0 ? 'Markdown' : undefined
+        caption: index === 0 ? `🎯 <b>Hook Headline</b>: ${escapeHtml(slidesData.slides[0].headline)}\n\n📖 <b>Story Title</b>: ${escapeHtml(stories[0].title)}\n🔗 <b>Source</b>: ${escapeHtml(stories[0].url)}` : undefined,
+        parse_mode: index === 0 ? 'HTML' : undefined
       }));
 
       await bot.sendMediaGroup(chatId, media);
 
       // Send the LinkedIn post text copy block
-      const escapedPost = slidesData.linkedin_post.replace(/`/g, '\\`');
-      await bot.sendMessage(chatId, `📝 *Copy-pasteable LinkedIn Post Caption*:\n\n\`\`\`\n${escapedPost}\n\`\`\``, { parse_mode: 'Markdown' });
+      await bot.sendMessage(chatId, `📝 <b>Copy-pasteable LinkedIn Post Caption</b>:\n\n<pre>${escapeHtml(slidesData.linkedin_post)}</pre>`, { parse_mode: 'HTML' });
 
       // 6. Send follow-up inline action keyboard
       const opts = {
@@ -1047,7 +1052,7 @@ async function executePipeline(timeSlot, chatId, theme = 'default') {
     console.error('Pipeline execution failed:', error);
     if (chatId && chatId !== 'manual-trigger' && bot) {
       try {
-        await bot.sendMessage(chatId, `🚨 *Pipeline Failure Alert!*\n\n*Error*: ${error.message}\n*Timestamp*: ${new Date().toLocaleString()}`, { parse_mode: 'Markdown' });
+        await bot.sendMessage(chatId, `🚨 <b>Pipeline Failure Alert!</b>\n\n<b>Error</b>: ${escapeHtml(error.message)}\n<b>Timestamp</b>: ${escapeHtml(new Date().toLocaleString())}`, { parse_mode: 'HTML' });
       } catch (tgSendErr) {
         console.error('Failed to send pipeline failure alert to Telegram:', tgSendErr.message);
       }
