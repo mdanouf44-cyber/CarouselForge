@@ -901,9 +901,11 @@ if (bot) {
       // 1. Core curation callbacks
       if (action.startsWith('approve_')) {
         const runId = action.replace('approve_', '');
+        // Answer callback query immediately to prevent timeout errors
+        await bot.answerCallbackQuery(callbackQuery.id, { text: 'Carousel approved! Saving and building assets...' });
+        
         await approveRun(runId);
 
-        await bot.answerCallbackQuery(callbackQuery.id, { text: 'Carousel approved!' });
         await bot.editMessageText(`Carousel (${escapeHtml(runId)}) Approved ✅\n\n📁 Saved to output: <code>dist/approved/run-${escapeHtml(runId)}</code>`, {
           chat_id: chatId,
           message_id: message.message_id,
@@ -916,9 +918,11 @@ if (bot) {
 
       } else if (action.startsWith('reject_')) {
         const runId = action.replace('reject_', '');
+        // Answer callback query immediately to prevent timeout errors
+        await bot.answerCallbackQuery(callbackQuery.id, { text: 'Carousel rejected. Cleaning up...' });
+        
         await rejectRun(runId);
 
-        await bot.answerCallbackQuery(callbackQuery.id, { text: 'Carousel rejected.' });
         await bot.editMessageText(`Carousel (${runId}) Rejected ❌\nTemporary files cleaned up.`, { chat_id: chatId, message_id: message.message_id });
 
       } else if (action.startsWith('regen_')) {
