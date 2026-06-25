@@ -18,7 +18,7 @@ if (supabaseUrl && supabaseAnonKey) {
         persistSession: false
       },
       realtime: {
-        webSocket: ws
+        transport: ws
       }
     });
     console.log('Supabase Database client initialized successfully.');
