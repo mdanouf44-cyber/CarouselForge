@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import ws from 'ws';
 
 dotenv.config();
 
@@ -12,7 +13,14 @@ let supabase = null;
 
 if (supabaseUrl && supabaseAnonKey) {
   try {
-    supabase = createClient(supabaseUrl, supabaseAnonKey);
+    supabase = createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: false
+      },
+      realtime: {
+        webSocket: ws
+      }
+    });
     console.log('Supabase Database client initialized successfully.');
   } catch (err) {
     console.error('Failed to initialize Supabase client:', err.message);
