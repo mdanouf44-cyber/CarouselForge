@@ -75,16 +75,26 @@ async function fetchHistory(isAutoRefresh = false) {
     document.getElementById('stat-rejected').textContent = data.stats.rejected;
     document.getElementById('stat-rate').textContent = `${data.stats.approvalRate}%`;
     
-    // Check if there is an active pending run
-    const pendingRun = data.history.find(h => h.status === 'pending');
-    if (pendingRun) {
-      renderCurationWorkspace(pendingRun);
+    // Check if there is an active run in history (latest one or currently active)
+    let activeWorkspaceRun = null;
+    if (activeRunId) {
+      activeWorkspaceRun = data.history.find(h => h.id === activeRunId);
+    }
+    if (!activeWorkspaceRun && data.history.length > 0) {
+      activeWorkspaceRun = data.history[0];
+    }
+
+    if (activeWorkspaceRun) {
+      renderCurationWorkspace(activeWorkspaceRun);
     } else {
       clearCurationWorkspace();
     }
     
     // Render History Archive Table
     renderHistoryTable(data.history);
+    
+    // Refresh scheduler settings to show updated tasks
+    fetchSchedulerSettings();
     
     if (!isAutoRefresh) {
       logToTerminal(`Loaded ${data.history.length} historical records.`, 'SYSTEM');
@@ -386,9 +396,9 @@ async function submitCurationAction(action) {
   const btnRegen = document.getElementById('btn-regen');
   const btnReject = document.getElementById('btn-reject');
   
-  btnApprove.disabled = true;
-  btnRegen.disabled = true;
-  btnReject.disabled = true;
+  if (btnApprove) btnApprove.disabled = true;
+  if (btnRegen) btnRegen.disabled = true;
+  if (btnReject) btnReject.disabled = true;
 
   logToTerminal(`Submitting curation action "${action.toUpperCase()}" for run ${activeRunId}...`, 'SYSTEM');
 
@@ -422,9 +432,9 @@ async function submitCurationAction(action) {
     logToTerminal(`Action request failed: ${err.message}`, 'ERROR');
   } finally {
     // Unlock buttons
-    btnApprove.disabled = false;
-    btnRegen.disabled = false;
-    btnReject.disabled = false;
+    if (btnApprove) btnApprove.disabled = false;
+    if (btnRegen) btnRegen.disabled = false;
+    if (btnReject) btnReject.disabled = false;
   }
 }
 
@@ -843,6 +853,153 @@ function bindLiveTextListeners() {
   });
 }
 
+// ==========================================
+// SCHEDULER MANAGEMENT HELPERS
+// ==========================================
+
+async function fetchSchedulerSettings() {
+  try {
+    const res = await fetch('/api/settings');
+    const data = await res.json();
+    
+    if (data.scheduler) {
+      document.getElementById('scheduler-enabled').checked = data.scheduler.enabled;
+      document.getElementById('scheduler-am-time').value = data.scheduler.amTime || '08:00';
+      document.getElementById('scheduler-pm-time').value = data.scheduler.pmTime || '20:00';
+      
+      renderOneOffTasksList(data.scheduler.oneOffs || []);
+    }
+  } catch (err) {
+    console.error('Failed to load scheduler settings:', err);
+  }
+}
+
+function renderOneOffTasksList(tasks) {
+  const container = document.getElementById('scheduled-tasks-list');
+  container.innerHTML = '';
+  
+  if (tasks.length === 0) {
+    container.innerHTML = '<div style="color: var(--text-secondary); font-style: italic; font-size: 11px; text-align: center; padding: 10px 0;">No tasks scheduled</div>';
+    return;
+  }
+  
+  tasks.forEach(task => {
+    const dateStr = new Date(task.time).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'Asia/Kolkata'
+    });
+    
+    const taskDiv = document.createElement('div');
+    taskDiv.style = 'display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.2); border: 1px solid var(--border-panel); border-radius: 6px; padding: 8px 10px; gap: 8px; margin-bottom: 2px;';
+    
+    let typeLabel = task.type.toUpperCase();
+    if (task.type === 'custom') {
+      typeLabel = `CUSTOM: "${task.topic}"`;
+    }
+    
+    taskDiv.innerHTML = `
+      <div style="flex-grow: 1; min-width: 0; text-align: left;">
+        <div style="font-weight: 600; font-size: 11.5px; color: var(--indigo-accent); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${typeLabel}">${typeLabel}</div>
+        <div style="font-size: 10.5px; color: var(--text-secondary); margin-top: 2px;">🕒 ${dateStr} (IST)</div>
+      </div>
+      <button class="btn-delete-oneoff" data-id="${task.id}" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.4); color: #ef4444; border-radius: 4px; padding: 3px 6px; font-size: 10px; cursor: pointer; flex-shrink: 0;">Delete</button>
+    `;
+    
+    container.appendChild(taskDiv);
+  });
+}
+
+async function saveSchedulerSettings() {
+  const enabled = document.getElementById('scheduler-enabled').checked;
+  const amTime = document.getElementById('scheduler-am-time').value;
+  const pmTime = document.getElementById('scheduler-pm-time').value;
+  
+  logToTerminal('Saving scheduler configurations to server...', 'SYSTEM');
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        scheduler: { enabled, amTime, pmTime }
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      logToTerminal('Scheduler configurations saved successfully!', 'SUCCESS');
+      alert('Scheduler configuration saved successfully!');
+    } else {
+      logToTerminal(`Failed to save scheduler: ${data.error}`, 'ERROR');
+    }
+  } catch (err) {
+    console.error('Failed to save settings:', err);
+    logToTerminal(`Failed to save settings: ${err.message}`, 'ERROR');
+  }
+}
+
+async function scheduleOneOffTask() {
+  const datetimeVal = document.getElementById('oneoff-datetime').value;
+  const type = document.getElementById('oneoff-type').value;
+  const topic = document.getElementById('oneoff-topic').value;
+  
+  if (!datetimeVal) {
+    alert('Please select a date and time for the one-off schedule.');
+    return;
+  }
+  
+  if (type === 'custom' && !topic.trim()) {
+    alert('Please enter a custom topic prompt.');
+    return;
+  }
+  
+  logToTerminal(`Scheduling one-off task for ${datetimeVal}...`, 'SYSTEM');
+  try {
+    const res = await fetch('/api/settings/one-off', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        time: new Date(datetimeVal).toISOString(),
+        type,
+        topic: type === 'custom' ? topic.trim() : null
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      logToTerminal('One-off task successfully scheduled!', 'SUCCESS');
+      document.getElementById('oneoff-datetime').value = '';
+      document.getElementById('oneoff-topic').value = '';
+      fetchSchedulerSettings();
+    } else {
+      logToTerminal(`Failed to schedule task: ${data.error}`, 'ERROR');
+      alert(`Schedule failed: ${data.error}`);
+    }
+  } catch (err) {
+    console.error('Failed to schedule task:', err);
+    logToTerminal(`Schedule task failed: ${err.message}`, 'ERROR');
+  }
+}
+
+async function deleteOneOffTask(id) {
+  logToTerminal(`Deleting scheduled task ${id}...`, 'SYSTEM');
+  try {
+    const res = await fetch(`/api/settings/one-off/${id}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    if (data.success) {
+      logToTerminal('Scheduled task deleted successfully.', 'SUCCESS');
+      fetchSchedulerSettings();
+    } else {
+      logToTerminal(`Failed to delete task: ${data.error}`, 'ERROR');
+    }
+  } catch (err) {
+    console.error('Failed to delete task:', err);
+    logToTerminal(`Delete task failed: ${err.message}`, 'ERROR');
+  }
+}
+
 function downloadActivePdf() {
   if (!activeRunId) {
     alert('No active run selected.');
@@ -893,7 +1050,10 @@ document.addEventListener('DOMContentLoaded', () => {
     downloadImagesAsZip(activeRunDetails.angle?.title || 'Carousel', activeRunDetails.imagePaths);
   });
   document.getElementById('btn-regen').addEventListener('click', () => submitCurationAction('regen'));
-  document.getElementById('btn-reject').addEventListener('click', () => submitCurationAction('reject'));
+  const btnReject = document.getElementById('btn-reject');
+  if (btnReject) {
+    btnReject.addEventListener('click', () => submitCurationAction('reject'));
+  }
 
   // Horizontal Scroll Controls
   const deck = document.getElementById('slides-deck');
@@ -1077,4 +1237,32 @@ document.addEventListener('DOMContentLoaded', () => {
       console.error('Failed to copy text:', err);
     });
   });
+
+  // Scheduler Event Listeners
+  document.getElementById('btn-save-scheduler').addEventListener('click', saveSchedulerSettings);
+  
+  const selectOneOffType = document.getElementById('oneoff-type');
+  const inputOneOffTopic = document.getElementById('oneoff-topic');
+  selectOneOffType.addEventListener('change', (e) => {
+    if (e.target.value === 'custom') {
+      inputOneOffTopic.style.display = 'block';
+    } else {
+      inputOneOffTopic.style.display = 'none';
+    }
+  });
+  
+  document.getElementById('btn-schedule-oneoff').addEventListener('click', scheduleOneOffTask);
+  
+  // Delegate delete clicks in the scheduled tasks list
+  document.getElementById('scheduled-tasks-list').addEventListener('click', (e) => {
+    if (e.target.classList.contains('btn-delete-oneoff')) {
+      const id = e.target.dataset.id;
+      if (confirm('Are you sure you want to cancel and delete this scheduled task?')) {
+        deleteOneOffTask(id);
+      }
+    }
+  });
+
+  // Fetch scheduler settings initially
+  fetchSchedulerSettings();
 });

@@ -26,14 +26,34 @@ if (!fs.existsSync(settingsPath)) {
 }
 
 function readSettings() {
+  let settings = { 
+    defaultTheme: 'default', 
+    customTheme: null,
+    scheduler: {
+      enabled: true,
+      amTime: "08:00",
+      pmTime: "20:00",
+      oneOffs: []
+    }
+  };
   try {
     if (fs.existsSync(settingsPath)) {
-      return JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      const parsed = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+      settings = { ...settings, ...parsed };
+      if (!settings.scheduler) {
+        settings.scheduler = {
+          enabled: true,
+          amTime: "08:00",
+          pmTime: "20:00",
+          oneOffs: []
+        };
+      }
+      return settings;
     }
   } catch (err) {
     console.error('Failed to read settings:', err);
   }
-  return { defaultTheme: 'default', customTheme: null };
+  return settings;
 }
 
 function writeSettings(settings) {
@@ -129,14 +149,10 @@ async function getSlidesContent(story, timeSlot) {
 
 export async function approveRun(runId, updatedSlides = null, updatedLinkedinPost = null) {
   const db = await readDb();
-  const entryIndex = db.history.findIndex(h => h.id === runId && h.status === 'pending');
+  const entryIndex = db.history.findIndex(h => h.id === runId);
 
   if (entryIndex === -1) {
-    const alreadyDone = db.history.find(h => h.id === runId);
-    if (alreadyDone) {
-      return { status: alreadyDone.status, message: `Carousel was already ${alreadyDone.status}` };
-    }
-    throw new Error('Pending run not found in history.');
+    throw new Error('Run not found in history.');
   }
 
   const entry = db.history[entryIndex];
@@ -152,15 +168,19 @@ export async function approveRun(runId, updatedSlides = null, updatedLinkedinPos
   if (updatedSlides) {
     console.log(`[Approve] Re-rendering slide PNGs for ${runId} due to custom content edits...`);
     
-    // Clean up the old temp run directory before re-rendering
+    // Clean up the old temp run directory before re-rendering (only if it is in dist/runs)
     if (entry.imagePaths && entry.imagePaths.length > 0) {
-      const oldRunDir = path.dirname(entry.imagePaths[0]);
-      try {
-        if (fs.existsSync(oldRunDir)) {
-          fs.rmSync(oldRunDir, { recursive: true, force: true });
+      const firstPath = entry.imagePaths[0].replace(/\\/g, '/');
+      if (firstPath.includes('/dist/runs/')) {
+        const oldRunDir = path.dirname(entry.imagePaths[0]);
+        try {
+          if (fs.existsSync(oldRunDir)) {
+            fs.rmSync(oldRunDir, { recursive: true, force: true });
+            console.log(`[Approve] Cleaned up old preview directory: ${oldRunDir}`);
+          }
+        } catch (err) {
+          console.warn(`Failed to clean up old temp run directory ${oldRunDir}:`, err.message);
         }
-      } catch (err) {
-        console.warn(`Failed to clean up old temp run directory ${oldRunDir}:`, err.message);
       }
     }
 
@@ -183,6 +203,7 @@ export async function approveRun(runId, updatedSlides = null, updatedLinkedinPos
 
   // Copy PNGs to output approved directory (downloading if they are remote URLs)
   const newPaths = [];
+  let tempRunDirToClean = '';
   for (const oldPath of entry.imagePaths) {
     const baseName = path.basename(oldPath.startsWith('http') ? new URL(oldPath).pathname : oldPath);
     const newPath = path.join(approvedDir, baseName);
@@ -194,6 +215,10 @@ export async function approveRun(runId, updatedSlides = null, updatedLinkedinPos
       const arrayBuffer = await response.arrayBuffer();
       fs.writeFileSync(newPath, Buffer.from(arrayBuffer));
     } else {
+      const normalizedPath = oldPath.replace(/\\/g, '/');
+      if (normalizedPath.includes('/dist/runs/')) {
+        tempRunDirToClean = path.dirname(oldPath);
+      }
       fs.copyFileSync(oldPath, newPath);
     }
     newPaths.push(newPath);
@@ -227,7 +252,21 @@ export async function approveRun(runId, updatedSlides = null, updatedLinkedinPos
   if (!approvedPdfPath && fs.existsSync(oldPdfPath)) {
     const pdfBaseName = path.basename(oldPdfPath);
     approvedPdfPath = path.join(approvedDir, pdfBaseName);
+    const normalizedPdfPath = oldPdfPath.replace(/\\/g, '/');
+    if (normalizedPdfPath.includes('/dist/runs/')) {
+      tempRunDirToClean = path.dirname(oldPdfPath);
+    }
     fs.copyFileSync(oldPdfPath, approvedPdfPath);
+  }
+
+  // Clean up the temporary rendering directory now that files are copied to approved directory
+  if (tempRunDirToClean && fs.existsSync(tempRunDirToClean)) {
+    try {
+      fs.rmSync(tempRunDirToClean, { recursive: true, force: true });
+      console.log(`[Approve] Cleaned up temporary runs directory: ${tempRunDirToClean}`);
+    } catch (err) {
+      console.warn(`[Approve] Failed to clean up temporary runs directory ${tempRunDirToClean}:`, err.message);
+    }
   }
 
   // Update history entry status & fields in Supabase
@@ -335,6 +374,10 @@ export async function regenerateRun(runId) {
     theme: currentRun.theme || 'default'
   });
 
+  // Auto-approve the run immediately to save assets to approved/ directory and set status to approved
+  console.log(`[Regenerate] Auto-approving run: ${runId}`);
+  await approveRun(runId);
+
   // Sync back to Telegram if chatbot is enabled and running
   if (bot && currentRun.chatId && currentRun.chatId !== 'manual-trigger') {
     try {
@@ -349,13 +392,14 @@ export async function regenerateRun(runId) {
       // Send the LinkedIn post text copy block
       await bot.sendMessage(currentRun.chatId, `🔄 <b>New LinkedIn Post Caption (Angle #${nextIndex + 1})</b>:\n\n<pre>${escapeHtml(slidesData.linkedin_post)}</pre>`, { parse_mode: 'HTML' });
 
+      // Automatically send the PDF file to Telegram
+      await sendPdfToTelegram(runId, currentRun.chatId);
+
       const opts = {
         reply_markup: {
           inline_keyboard: [
             [
-              { text: '✅ Approve', callback_data: `approve_${runId}` },
-              { text: '🔄 Regenerate', callback_data: `regen_${runId}` },
-              { text: '❌ Reject', callback_data: `reject_${runId}` }
+              { text: '🔄 Regenerate', callback_data: `regen_${runId}` }
             ]
           ]
         }
@@ -512,6 +556,10 @@ export async function executeCustomGeneration(topic, theme, chatId) {
       theme: targetTheme
     });
 
+    // Auto-approve the run immediately to save assets to approved/ directory and set status to approved
+    console.log(`[Custom Generate] Auto-approving run: ${runId}`);
+    await approveRun(runId);
+
     if (!isManualWeb && bot) {
       await bot.sendMessage(chatId, `📤 Sending custom carousel images to Telegram...`);
       const media = renderResult.imagePaths.map((filePath, index) => ({
@@ -526,21 +574,11 @@ export async function executeCustomGeneration(topic, theme, chatId) {
       // Send the LinkedIn post text copy block
       await bot.sendMessage(chatId, `📝 <b>Copy-pasteable LinkedIn Post Caption</b>:\n\n<pre>${escapeHtml(slidesData.linkedin_post)}</pre>`, { parse_mode: 'HTML' });
 
-      // Send inline action keyboard
-      const opts = {
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '✅ Approve', callback_data: `approve_${runId}` },
-              { text: '❌ Reject', callback_data: `reject_${runId}` }
-            ]
-          ]
-        }
-      };
-      await bot.sendMessage(chatId, `Actions for Carousel (${runId}):`, opts);
+      // Automatically send the PDF file to Telegram
+      await sendPdfToTelegram(runId, chatId);
     }
     
-    console.log(`[Custom Generate] Successfully generated and stored custom carousel for runId: ${runId}`);
+    console.log(`[Custom Generate] Successfully generated and auto-approved custom carousel for runId: ${runId}`);
     return { success: true, runId };
   } catch (err) {
     console.error(`[Custom Generate] Failed to generate custom carousel:`, err.message);
@@ -613,10 +651,10 @@ async function showThemeSelector(chatId) {
 
 async function showCurationWorkspace(chatId) {
   const db = await readDb();
-  const activePending = db.history.find(h => h.status === 'pending');
+  const activePending = db.history.length > 0 ? db.history[db.history.length - 1] : null;
   
   if (!activePending) {
-    await bot.sendMessage(chatId, '📂 <b>Curation Space is Empty</b>\nNo pending carousels to review. Use /generate or /topic to create one.', { parse_mode: 'HTML' });
+    await bot.sendMessage(chatId, '📂 <b>Curation Space is Empty</b>\nNo carousels to review. Use /generate or /topic to create one.', { parse_mode: 'HTML' });
     return;
   }
 
@@ -642,9 +680,7 @@ async function showCurationWorkspace(chatId) {
     reply_markup: {
       inline_keyboard: [
         [
-          { text: '✅ Approve', callback_data: `approve_${runId}` },
-          { text: '🔄 Regen Next Angle', callback_data: `regen_${runId}` },
-          { text: '❌ Reject', callback_data: `reject_${runId}` }
+          { text: '🔄 Regen Next Angle', callback_data: `regen_${runId}` }
         ],
         [
           { text: '📄 Get PDF', callback_data: `download_pdf_${runId}` },
@@ -1051,6 +1087,10 @@ async function executePipeline(timeSlot, chatId, theme = 'default') {
       theme
     });
 
+    // Auto-approve the run immediately to save assets to approved/ directory and set status to approved
+    console.log(`[Pipeline] Auto-approving run: ${runId}`);
+    await approveRun(runId);
+
     // 5. Send images to Telegram
     if (!isManualWeb && bot) {
       await bot.sendMessage(chatId, `📤 Sending carousel images to Telegram...`);
@@ -1066,14 +1106,15 @@ async function executePipeline(timeSlot, chatId, theme = 'default') {
       // Send the LinkedIn post text copy block
       await bot.sendMessage(chatId, `📝 <b>Copy-pasteable LinkedIn Post Caption</b>:\n\n<pre>${escapeHtml(slidesData.linkedin_post)}</pre>`, { parse_mode: 'HTML' });
 
+      // Automatically send the PDF file to Telegram
+      await sendPdfToTelegram(runId, chatId);
+
       // 6. Send follow-up inline action keyboard
       const opts = {
         reply_markup: {
           inline_keyboard: [
             [
-              { text: '✅ Approve', callback_data: `approve_${runId}` },
-              { text: '🔄 Regenerate', callback_data: `regen_${runId}` },
-              { text: '❌ Reject', callback_data: `reject_${runId}` }
+              { text: '🔄 Regenerate', callback_data: `regen_${runId}` }
             ]
           ]
         }
@@ -1081,7 +1122,7 @@ async function executePipeline(timeSlot, chatId, theme = 'default') {
       await bot.sendMessage(chatId, `Actions for Carousel (${runId}):`, opts);
     }
 
-    console.log(`Pipeline successfully executed and pending approval for runId: ${runId}`);
+    console.log(`Pipeline successfully executed and auto-approved for runId: ${runId}`);
 
   } catch (error) {
     console.error('Pipeline execution failed:', error);
@@ -1096,29 +1137,72 @@ async function executePipeline(timeSlot, chatId, theme = 'default') {
 }
 
 // Scheduler Configuration (Asia/Kolkata timezone)
-if (!token || !defaultChatId) {
-  console.warn('⚠️ Warning: Scheduler is inactive because TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing.');
-} else {
-  // Morning cron: 08:00 AM IST
-  cron.schedule('0 8 * * *', () => {
-    console.log('Scheduled trigger activated: AM Run (08:00 IST)');
-    const theme = readSettings().defaultTheme;
-    executePipeline('am', defaultChatId, theme);
-  }, {
-    timezone: 'Asia/Kolkata'
-  });
+// Dynamic Scheduler Loop (Checks every minute on Asia/Kolkata timezone)
+cron.schedule('* * * * *', async () => {
+  try {
+    const settings = readSettings();
+    if (!settings.scheduler || !settings.scheduler.enabled) {
+      return;
+    }
 
-  // Evening cron: 08:00 PM IST
-  cron.schedule('0 20 * * *', () => {
-    console.log('Scheduled trigger activated: PM Run (20:00 IST)');
-    const theme = readSettings().defaultTheme;
-    executePipeline('pm', defaultChatId, theme);
-  }, {
-    timezone: 'Asia/Kolkata'
-  });
+    if (!token || !defaultChatId) {
+      console.warn('[Scheduler] Skipping tick: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing.');
+      return;
+    }
 
-  console.log('Asia/Kolkata Scheduler initialized for 08:00 AM and 08:00 PM daily runs.');
-}
+    const options = { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false };
+    const timeFormatter = new Intl.DateTimeFormat('en-US', options);
+    const nowTimeStr = timeFormatter.format(new Date()); // e.g. "08:00"
+
+    // 1. Check morning (AM) run
+    if (settings.scheduler.amTime === nowTimeStr) {
+      console.log(`[Scheduler] AM Trigger activated at ${nowTimeStr} IST`);
+      executePipeline('am', defaultChatId, settings.defaultTheme || 'default').catch(console.error);
+    }
+
+    // 2. Check evening (PM) run
+    if (settings.scheduler.pmTime === nowTimeStr) {
+      console.log(`[Scheduler] PM Trigger activated at ${nowTimeStr} IST`);
+      executePipeline('pm', defaultChatId, settings.defaultTheme || 'default').catch(console.error);
+    }
+
+    // 3. Check one-off tasks
+    const currentIstTime = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+    const currentIstDate = new Date(currentIstTime);
+
+    let dbUpdated = false;
+    if (settings.scheduler.oneOffs && settings.scheduler.oneOffs.length > 0) {
+      for (const task of settings.scheduler.oneOffs) {
+        if (!task.executed) {
+          const taskDate = new Date(new Date(task.time).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+          if (currentIstDate >= taskDate) {
+            console.log(`[Scheduler] Executing scheduled one-off task: ${task.id} (${task.type})`);
+            task.executed = true;
+            dbUpdated = true;
+
+            if (task.type === 'custom') {
+              executeCustomGeneration(task.topic, settings.defaultTheme || 'default', defaultChatId).catch(console.error);
+            } else {
+              executePipeline(task.type, defaultChatId, settings.defaultTheme || 'default').catch(console.error);
+            }
+          }
+        }
+      }
+      
+      // Clean up executed one-offs from settings to keep it clean
+      if (dbUpdated) {
+        settings.scheduler.oneOffs = settings.scheduler.oneOffs.filter(t => !t.executed);
+        writeSettings(settings);
+      }
+    }
+  } catch (err) {
+    console.error('[Scheduler] Error in scheduler tick:', err.message);
+  }
+}, {
+  timezone: 'Asia/Kolkata'
+});
+
+console.log('Asia/Kolkata Dynamic Scheduler loop initialized.');
 
 // Database/Storage Cleanup Cron: Runs every day at 12:00 AM Midnight IST
 // Automatically deletes history entries and Supabase Storage files older than 7 days
@@ -1275,6 +1359,67 @@ app.delete('/api/carousel/:id', async (req, res) => {
     console.error(`API delete error [${id}]:`, err.message);
     res.status(500).json({ error: err.message });
   }
+});
+
+// API: Get Settings
+app.get('/api/settings', (req, res) => {
+  res.json(readSettings());
+});
+
+// API: Save Settings
+app.post('/api/settings', (req, res) => {
+  const { scheduler, defaultTheme, customTheme } = req.body;
+  const currentSettings = readSettings();
+
+  if (defaultTheme) currentSettings.defaultTheme = defaultTheme;
+  if (customTheme !== undefined) currentSettings.customTheme = customTheme;
+  
+  if (scheduler) {
+    currentSettings.scheduler = {
+      ...currentSettings.scheduler,
+      ...scheduler
+    };
+  }
+
+  writeSettings(currentSettings);
+  res.json({ success: true, settings: currentSettings });
+});
+
+// API: Schedule One-off
+app.post('/api/settings/one-off', (req, res) => {
+  const { time, type, topic } = req.body;
+  if (!time || !type) {
+    return res.status(400).json({ error: 'Missing time or type in request body.' });
+  }
+
+  const currentSettings = readSettings();
+  if (!currentSettings.scheduler.oneOffs) {
+    currentSettings.scheduler.oneOffs = [];
+  }
+
+  const newOneOff = {
+    id: `oneoff-${Date.now()}`,
+    time, // ISO string
+    type,
+    topic: type === 'custom' ? topic : null,
+    executed: false
+  };
+
+  currentSettings.scheduler.oneOffs.push(newOneOff);
+  writeSettings(currentSettings);
+
+  res.json({ success: true, task: newOneOff });
+});
+
+// API: Delete One-off
+app.delete('/api/settings/one-off/:id', (req, res) => {
+  const { id } = req.params;
+  const currentSettings = readSettings();
+  if (currentSettings.scheduler.oneOffs) {
+    currentSettings.scheduler.oneOffs = currentSettings.scheduler.oneOffs.filter(t => t.id !== id);
+    writeSettings(currentSettings);
+  }
+  res.json({ success: true });
 });
 
 // Start Web Dashboard listening

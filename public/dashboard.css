@@ -603,7 +603,7 @@ body {
 }
 
 .btn-action-approve {
-  grid-column: span 2;
+  grid-column: span 4;
 }
 
 .btn-action-download {
@@ -612,6 +612,10 @@ body {
 
 .btn-action-download-pdf {
   grid-column: span 2;
+}
+
+.btn-action-regen {
+  grid-column: span 4;
 }
 
 .btn-action-download {
@@ -1153,6 +1157,56 @@ body {
   transform: translateY(0);
 }
 
+/* Scheduler Settings Console Styling */
+.scheduler-panel {
+  background: rgba(255, 255, 255, 0.02) !important;
+  border: 1px solid var(--border-panel) !important;
+  border-radius: 14px !important;
+  padding: 20px !important;
+}
+
+.scheduler-panel h2 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scheduler-time-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 15px;
+}
+
+.scheduler-time-input,
+.scheduler-oneoff-datetime,
+.scheduler-oneoff-select,
+.scheduler-oneoff-input {
+  width: 100%;
+  padding: 8px 10px;
+  background: rgba(0,0,0,0.25);
+  border: 1px solid var(--border-panel);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.scheduler-oneoff-select {
+  height: auto;
+  margin-bottom: 8px;
+}
+
+.scheduler-oneoff-input {
+  display: none;
+}
+
 
 /* ==========================================================================
    RESPONSIVENESS & MEDIA QUERIES
@@ -1215,7 +1269,7 @@ body {
     transform: scale(0.26) !important; /* Perfect scale mapping for 1080px to 280px preview container */
   }
 
-  /* Dynamic 2x2 button grid with Approve spanning full width at the top */
+  /* Dynamic button grid with Approve spanning full width at the top */
   .curation-action-buttons {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 10px !important;
@@ -1227,10 +1281,12 @@ body {
   }
 
   .btn-action-download,
-  .btn-action-download-pdf,
-  .btn-action-regen,
-  .btn-action-reject {
+  .btn-action-download-pdf {
     grid-column: span 1 !important;
+  }
+
+  .btn-action-regen {
+    grid-column: span 2 !important;
   }
 
   /* History Table Card Layout Transformation */
@@ -1398,6 +1454,10 @@ body {
   }
   
   .customizer-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .scheduler-time-grid {
     grid-template-columns: 1fr !important;
   }
 }
