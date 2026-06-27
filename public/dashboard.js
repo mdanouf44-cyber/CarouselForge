@@ -693,7 +693,7 @@ function renderLivePreviewHtml(run) {
     const progressPercent = (index / (totalSlides - 1 || 1)) * 100;
     
     let isDark;
-    if (theme === 'light' || theme === 'r3' || theme === 'r4') {
+    if (theme === 'light' || theme === 'r3') {
       isDark = false;
     } else if (theme === 'dark' || theme === 'ocean' || theme === 'sunset' || theme === 'forest' || theme === 'r1' || theme === 'r2') {
       isDark = true;
@@ -767,7 +767,6 @@ function renderLivePreviewHtml(run) {
         
         <div class="accent-bar ${accentBarClass}"></div>
         <div class="slide-content-area ${contentAreaClass}">
-          ${theme === 'r4' && index === 0 ? `<div class="slide-title-pre">3 WAYS TO:</div>` : ''}
           <h1 class="slide-title ${titleClass}">${titleText}</h1>
           <p class="slide-paragraph">${bodyText}</p>
         </div>

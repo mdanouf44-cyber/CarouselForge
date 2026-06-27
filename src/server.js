@@ -64,6 +64,72 @@ function writeSettings(settings) {
   }
 }
 
+async function resolveThemeWithRotation(requestedTheme) {
+  const rotationPool = ['default', 'r1', 'r2', 'r3', 'dark', 'light', 'ocean', 'sunset', 'forest'];
+  let selectedTheme = requestedTheme || 'default';
+
+  if (selectedTheme === 'default') {
+    try {
+      const db = await readDb();
+      
+      // Get start of today in local time
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayTime = today.getTime();
+
+      const themesUsedToday = new Set();
+      if (db.history) {
+        for (const h of db.history) {
+          if (h.timestamp && h.timestamp >= todayTime) {
+            if (h.theme && rotationPool.includes(h.theme)) {
+              themesUsedToday.add(h.theme);
+            }
+          }
+        }
+      }
+
+      // Find the last theme used overall to determine the rotation index
+      let lastTheme = null;
+      if (db.history && db.history.length > 0) {
+        for (let i = db.history.length - 1; i >= 0; i--) {
+          const hTheme = db.history[i].theme;
+          if (hTheme && rotationPool.includes(hTheme)) {
+            lastTheme = hTheme;
+            break;
+          }
+        }
+      }
+
+      // Rotate to the next theme, skipping any that were used today
+      let startIdx = lastTheme ? rotationPool.indexOf(lastTheme) : -1;
+      if (startIdx === -1) {
+        startIdx = 0;
+      } else {
+        startIdx = (startIdx + 1) % rotationPool.length;
+      }
+
+      for (let i = 0; i < rotationPool.length; i++) {
+        const idx = (startIdx + i) % rotationPool.length;
+        const candidateTheme = rotationPool[idx];
+        if (!themesUsedToday.has(candidateTheme)) {
+          selectedTheme = candidateTheme;
+          break;
+        }
+      }
+
+      if (!selectedTheme) {
+        selectedTheme = rotationPool[startIdx];
+      }
+
+      console.log(`[Theme Rotation] Rotation trigger: requestedTheme='${requestedTheme}', lastTheme='${lastTheme}', todayUsed=[${Array.from(themesUsedToday).join(', ')}], resolvedTheme='${selectedTheme}'`);
+    } catch (err) {
+      console.error('[Theme Rotation] Error resolving rotation theme:', err);
+    }
+  }
+
+  return selectedTheme;
+}
+
 const token = process.env.TELEGRAM_BOT_TOKEN;
 const defaultChatId = process.env.TELEGRAM_CHAT_ID;
 
@@ -509,12 +575,13 @@ async function sendZipToTelegram(runId, chatId) {
 }
 
 export async function executeCustomGeneration(topic, theme, chatId) {
+  const isManualWeb = chatId === 'manual-trigger';
   const targetTheme = theme || 'default';
+  const resolvedTheme = await resolveThemeWithRotation(targetTheme);
   const runId = `run-custom-${Date.now()}`;
   
-  const isManualWeb = chatId === 'manual-trigger';
   if (!isManualWeb && bot) {
-    await bot.sendMessage(chatId, `🤖 <b>Starting Custom Topic Generation</b>:\n• <b>Topic</b>: "${escapeHtml(topic)}"\n• <b>Theme</b>: ${escapeHtml(targetTheme.toUpperCase())}\n\nGenerating copy and rendering slides...`, { parse_mode: 'HTML' });
+    await bot.sendMessage(chatId, `🤖 <b>Starting Custom Topic Generation</b>:\n• <b>Topic</b>: "${escapeHtml(topic)}"\n• <b>Theme</b>: ${escapeHtml(resolvedTheme.toUpperCase())}\n\nGenerating copy and rendering slides...`, { parse_mode: 'HTML' });
   }
 
   try {
@@ -533,12 +600,12 @@ export async function executeCustomGeneration(topic, theme, chatId) {
       angles: [story],
       currentAngleIndex: 0,
       chatId,
-      theme: targetTheme
+      theme: resolvedTheme
     };
     await writeDb(db);
 
     const slidesData = await getSlidesContent(story, 'pm');
-    slidesData.theme = targetTheme;
+    slidesData.theme = resolvedTheme;
 
     const renderResult = await renderCarouselPngs(slidesData);
 
@@ -553,7 +620,7 @@ export async function executeCustomGeneration(topic, theme, chatId) {
       slides: slidesData.slides,
       imagePaths: renderResult.imagePaths,
       linkedin_post: slidesData.linkedin_post,
-      theme: targetTheme
+      theme: resolvedTheme
     });
 
     // Auto-approve the run immediately to save assets to approved/ directory and set status to approved
@@ -628,15 +695,14 @@ async function showThemeSelector(chatId) {
           { text: '🤍 Elegant Light', callback_data: 'select_theme_r3' }
         ],
         [
-          { text: '🤎 Warm Serif', callback_data: 'select_theme_r4' },
-          { text: '🕶️ Standard Dark', callback_data: 'select_theme_dark' }
+          { text: '🕶️ Standard Dark', callback_data: 'select_theme_dark' },
+          { text: '☀️ Standard Light', callback_data: 'select_theme_light' }
         ],
         [
-          { text: '☀️ Standard Light', callback_data: 'select_theme_light' },
-          { text: '🌊 Ocean Breeze', callback_data: 'select_theme_ocean' }
+          { text: '🌊 Ocean Breeze', callback_data: 'select_theme_ocean' },
+          { text: '🌆 Neon Sunset', callback_data: 'select_theme_sunset' }
         ],
         [
-          { text: '🌆 Neon Sunset', callback_data: 'select_theme_sunset' },
           { text: '🌲 Forest Mint', callback_data: 'select_theme_forest' }
         ]
       ]
@@ -800,7 +866,7 @@ if (bot) {
     if (input.includes('|')) {
       const parts = input.split('|');
       const themePart = parts[0].trim().toLowerCase();
-      const validThemes = ['default', 'custom', 'r1', 'r2', 'r3', 'r4', 'dark', 'light', 'ocean', 'sunset', 'forest'];
+      const validThemes = ['default', 'custom', 'r1', 'r2', 'r3', 'dark', 'light', 'ocean', 'sunset', 'forest'];
       if (validThemes.includes(themePart)) {
         theme = themePart;
         topic = parts.slice(1).join('|').trim();
@@ -1033,6 +1099,8 @@ if (bot) {
 async function executePipeline(timeSlot, chatId, theme = 'default') {
   try {
     const isManualWeb = chatId === 'manual-trigger';
+    const resolvedTheme = await resolveThemeWithRotation(theme);
+
     if (!isManualWeb && bot) {
       await bot.sendMessage(chatId, `🤖 <b>Starting Carousel Pipeline</b> for slot: <b>${escapeHtml(timeSlot.toUpperCase())}</b>...`, { parse_mode: 'HTML' });
     }
@@ -1055,7 +1123,7 @@ async function executePipeline(timeSlot, chatId, theme = 'default') {
       angles: stories,
       currentAngleIndex: 0,
       chatId,
-      theme
+      theme: resolvedTheme
     };
     await writeDb(db);
 
@@ -1064,7 +1132,7 @@ async function executePipeline(timeSlot, chatId, theme = 'default') {
       await bot.sendMessage(chatId, `✍ <b>Angle #1 Selected</b>:\n"${escapeHtml(stories[0].title)}"\nGenerating copy via Gemini/Nvidia...`, { parse_mode: 'HTML' });
     }
     const slidesData = await getSlidesContent(stories[0], timeSlot);
-    slidesData.theme = theme;
+    slidesData.theme = resolvedTheme;
 
     // 4. Render to PNGs
     if (!isManualWeb && bot) {
@@ -1084,7 +1152,7 @@ async function executePipeline(timeSlot, chatId, theme = 'default') {
       slides: slidesData.slides,
       imagePaths: renderResult.imagePaths,
       linkedin_post: slidesData.linkedin_post,
-      theme
+      theme: resolvedTheme
     });
 
     // Auto-approve the run immediately to save assets to approved/ directory and set status to approved

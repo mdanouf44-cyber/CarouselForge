@@ -83,7 +83,7 @@ function buildSlidesHtml(slidesData, brandHandle, authorName) {
 
     // Determine light vs dark category classes
     let isDark;
-    if (theme === 'light' || theme === 'r3' || theme === 'r4') {
+    if (theme === 'light' || theme === 'r3') {
       isDark = false; // Light/warm background themes
     } else if (theme === 'dark' || theme === 'ocean' || theme === 'sunset' || theme === 'forest' || theme === 'r1' || theme === 'r2') {
       isDark = true;  // Dark background themes
@@ -159,7 +159,6 @@ function buildSlidesHtml(slidesData, brandHandle, authorName) {
         
         <div class="accent-bar ${accentBarClass}"></div>
         <div class="slide-content-area ${contentAreaClass}">
-          ${theme === 'r4' && index === 0 ? `<div class="slide-title-pre">3 WAYS TO:</div>` : ''}
           <h1 class="slide-title ${titleClass}">${titleText}</h1>
           <p class="slide-paragraph">${bodyText}</p>
         </div>
