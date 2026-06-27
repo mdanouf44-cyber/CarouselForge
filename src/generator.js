@@ -186,16 +186,7 @@ async function generateHuggingFaceContent(story, timeSlot) {
 
 // Main generation wrapper with fallback controls
 export async function generateCarouselContent(story, timeSlot) {
-  // If Hugging Face is configured, try it first
-  if (process.env.HF_API_KEY) {
-    try {
-      return await generateHuggingFaceContent(story, timeSlot);
-    } catch (error) {
-      console.warn('Hugging Face API generation failed. Falling back to NVIDIA...', error.message);
-    }
-  }
-
-  // If NVIDIA is configured, try it
+  // If NVIDIA is configured, try it first
   if (process.env.NVIDIA_API_KEY) {
     try {
       return await generateNvidiaContent(story, timeSlot);
@@ -204,6 +195,15 @@ export async function generateCarouselContent(story, timeSlot) {
     }
   }
 
-  // Fallback to Gemini
-  return await generateGeminiContent(story, timeSlot);
+  // If Gemini is configured, try it second
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      return await generateGeminiContent(story, timeSlot);
+    } catch (error) {
+      console.warn('Gemini API generation failed. Falling back to Hugging Face...', error.message);
+    }
+  }
+
+  // Fallback to Hugging Face
+  return await generateHuggingFaceContent(story, timeSlot);
 }
