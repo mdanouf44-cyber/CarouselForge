@@ -3,8 +3,8 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-if (!process.env.GEMINI_API_KEY && !process.env.NVIDIA_API_KEY) {
-  console.warn('Warning: Neither GEMINI_API_KEY nor NVIDIA_API_KEY is defined in the environment variables.');
+if (!process.env.NARA_API_KEY && !process.env.NVIDIA_API_KEY && !process.env.GEMINI_API_KEY) {
+  console.warn('Warning: None of NARA_API_KEY, NVIDIA_API_KEY, or GEMINI_API_KEY are defined in the environment variables.');
 }
 
 // Clean code blocks from JSON string if the model returns them
@@ -87,6 +87,44 @@ Instructions:
 }
 
 // Fetch completions from NVIDIA NIM (OpenAI compatible endpoint)
+// Fetch completions from Nara Router (OpenAI compatible endpoint)
+async function generateNaraContent(story, timeSlot) {
+  const apiKey = process.env.NARA_API_KEY;
+  const baseUrl = process.env.NARA_BASE_URL || 'https://router.bynara.id/v1';
+  const model = process.env.NARA_MODEL || 'claude-sonnet-4.5';
+  
+  console.log(`Generating AI carousel content via Nara Router API (Model: ${model}) for story: "${story.title}"`);
+  const prompt = buildSystemPrompt(story, timeSlot);
+
+  const response = await fetch(`${baseUrl}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: model,
+      messages: [
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.2,
+      max_tokens: 1500,
+      response_format: { type: 'json_object' }
+    }),
+    signal: AbortSignal.timeout(120000)
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Nara Router API error: Status ${response.status} ${response.statusText} - ${errorText}`);
+  }
+
+  const result = await response.json();
+  const text = result.choices[0].message.content;
+  const cleanedText = cleanJsonString(text);
+  return JSON.parse(cleanedText);
+}
+
 async function generateNvidiaContent(story, timeSlot) {
   const apiKey = process.env.NVIDIA_API_KEY;
   const model = process.env.NVIDIA_MODEL || 'meta/llama-3.1-70b-instruct';
@@ -153,7 +191,19 @@ async function generateGeminiContent(story, timeSlot) {
 export async function generateCarouselContent(story, timeSlot) {
   const errors = [];
 
-  // 1. Try NVIDIA NIM if configured
+  // 1. Try Nara Router if configured (Primary)
+  if (process.env.NARA_API_KEY) {
+    try {
+      return await generateNaraContent(story, timeSlot);
+    } catch (error) {
+      console.warn('Nara Router API generation failed. Falling back...', error.message);
+      errors.push(`Nara Router: ${error.message}`);
+    }
+  } else {
+    errors.push('Nara Router: Not configured (missing NARA_API_KEY)');
+  }
+
+  // 2. Try NVIDIA NIM if configured (Fallback 1)
   if (process.env.NVIDIA_API_KEY) {
     try {
       return await generateNvidiaContent(story, timeSlot);
@@ -165,7 +215,7 @@ export async function generateCarouselContent(story, timeSlot) {
     errors.push('NVIDIA NIM: Not configured (missing NVIDIA_API_KEY)');
   }
 
-  // 2. Try Google Gemini if configured
+  // 3. Try Google Gemini if configured (Fallback 2)
   if (process.env.GEMINI_API_KEY) {
     try {
       return await generateGeminiContent(story, timeSlot);
