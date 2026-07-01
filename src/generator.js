@@ -186,24 +186,44 @@ async function generateHuggingFaceContent(story, timeSlot) {
 
 // Main generation wrapper with fallback controls
 export async function generateCarouselContent(story, timeSlot) {
-  // If NVIDIA is configured, try it first
+  const errors = [];
+
+  // 1. Try NVIDIA NIM if configured
   if (process.env.NVIDIA_API_KEY) {
     try {
       return await generateNvidiaContent(story, timeSlot);
     } catch (error) {
-      console.warn('NVIDIA NIM API generation failed. Falling back to Gemini...', error.message);
+      console.warn('NVIDIA NIM API generation failed. Falling back...', error.message);
+      errors.push(`NVIDIA NIM: ${error.message}`);
     }
+  } else {
+    errors.push('NVIDIA NIM: Not configured (missing NVIDIA_API_KEY)');
   }
 
-  // If Gemini is configured, try it second
+  // 2. Try Google Gemini if configured
   if (process.env.GEMINI_API_KEY) {
     try {
       return await generateGeminiContent(story, timeSlot);
     } catch (error) {
-      console.warn('Gemini API generation failed. Falling back to Hugging Face...', error.message);
+      console.warn('Gemini API generation failed. Falling back...', error.message);
+      errors.push(`Gemini: ${error.message}`);
     }
+  } else {
+    errors.push('Gemini: Not configured (missing GEMINI_API_KEY)');
   }
 
-  // Fallback to Hugging Face
-  return await generateHuggingFaceContent(story, timeSlot);
+  // 3. Try Hugging Face if configured
+  if (process.env.HF_API_KEY) {
+    try {
+      return await generateHuggingFaceContent(story, timeSlot);
+    } catch (error) {
+      console.warn('Hugging Face API generation failed...', error.message);
+      errors.push(`Hugging Face: ${error.message}`);
+    }
+  } else {
+    errors.push('Hugging Face: Not configured (missing HF_API_KEY)');
+  }
+
+  // If we reach this point, all configured providers failed
+  throw new Error(`Content generation failed. Details:\n- ${errors.join('\n- ')}`);
 }
